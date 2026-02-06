@@ -63,8 +63,8 @@ func TestVersion(t *testing.T) {
 	if pdfsdk.Version == "" {
 		t.Error("Expected version string, got empty")
 	}
-	if pdfsdk.Version != "2.1.0" {
-		t.Errorf("Expected version 2.1.0, got %s", pdfsdk.Version)
+	if pdfsdk.Version != "2.3.0" {
+		t.Errorf("Expected version 2.3.0, got %s", pdfsdk.Version)
 	}
 }
 

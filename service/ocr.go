@@ -41,13 +41,11 @@ func (s *ocrService) IsAvailable() bool {
 	if err != nil {
 		return false
 	}
-	// Also check for pdftoppm (part of poppler-utils)
 	_, err = exec.LookPath("pdftoppm")
 	return err == nil
 }
 
 func (s *ocrService) convertPDFToImages(ctx context.Context, pdfPath string, outDir string) ([]string, error) {
-	// pdftoppm -jpeg -r 300 input.pdf output_prefix
 	args := []string{"-jpeg", "-r", "300", pdfPath, filepath.Join(outDir, "page")}
 	cmd := exec.CommandContext(ctx, "pdftoppm", args...)
 
@@ -66,12 +64,7 @@ func (s *ocrService) convertPDFToImages(ctx context.Context, pdfPath string, out
 			imageFiles = append(imageFiles, filepath.Join(outDir, f.Name()))
 		}
 	}
-	sort.Strings(imageFiles) // Ensure order page-1, page-2...
-
-	// Sort fixes potentially wrong order like page-1, page-10, page-2
-	// But pdftoppm usually pads numbers (page-01.jpg).
-	// If needed, we can use natural sort, but for now simple sort should work if padding exists or counts < 10.
-	// Actually pdftoppm uses -01, -02 by default for multi-page.
+	sort.Strings(imageFiles)
 
 	return imageFiles, nil
 }
@@ -157,7 +150,6 @@ func (s *ocrService) CreateSearchablePDF(ctx context.Context, input []byte, lang
 
 	for _, imgPath := range images {
 		outBase := filepath.Join(tmpDir, filepath.Base(imgPath)+"_out")
-		// Output to PDF
 		args := []string{imgPath, outBase, "-l", lang, "pdf"}
 		cmd := exec.CommandContext(ctx, "tesseract", args...)
 
@@ -173,7 +165,6 @@ func (s *ocrService) CreateSearchablePDF(ctx context.Context, input []byte, lang
 		return nil, fmt.Errorf("no pages processed")
 	}
 
-	// Merge all single-page PDFs into one
 	outputPath := filepath.Join(tmpDir, "final.pdf")
 	conf := model.NewDefaultConfiguration()
 
