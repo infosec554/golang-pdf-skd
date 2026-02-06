@@ -11,13 +11,9 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// MergeService merges multiple PDF files into one
 type MergeService interface {
-	// Merge merges multiple PDF readers into single PDF bytes
 	Merge(inputs []io.Reader) ([]byte, error)
-	// MergeFiles merges multiple PDF files into one
 	MergeFiles(inputPaths []string, outputPath string) error
-	// MergeBytes merges multiple PDF byte slices into one
 	MergeBytes(inputs [][]byte) ([]byte, error)
 }
 
@@ -25,12 +21,10 @@ type mergeService struct {
 	log logger.ILogger
 }
 
-// NewMergeService creates a new merge service
 func NewMergeService(log logger.ILogger) MergeService {
 	return &mergeService{log: log}
 }
 
-// Merge merges multiple PDF readers into single PDF bytes
 func (s *mergeService) Merge(inputs []io.Reader) ([]byte, error) {
 	s.log.Info("MergeService.Merge called", logger.Int("inputCount", len(inputs)))
 
@@ -46,7 +40,6 @@ func (s *mergeService) Merge(inputs []io.Reader) ([]byte, error) {
 	return s.MergeBytes(inputBytes)
 }
 
-// MergeFiles merges multiple PDF files into one output file
 func (s *mergeService) MergeFiles(inputPaths []string, outputPath string) error {
 	s.log.Info("MergeService.MergeFiles called", logger.Int("inputCount", len(inputPaths)))
 
@@ -61,18 +54,15 @@ func (s *mergeService) MergeFiles(inputPaths []string, outputPath string) error 
 	return nil
 }
 
-// MergeBytes merges multiple PDF byte slices into one
 func (s *mergeService) MergeBytes(inputs [][]byte) ([]byte, error) {
 	s.log.Info("MergeService.MergeBytes called", logger.Int("inputCount", len(inputs)))
 
-	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "pdf-merge-*")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Write inputs to temp files
 	var inputPaths []string
 	for i, data := range inputs {
 		tmpPath := tmpDir + "/" + string(rune('a'+i)) + ".pdf"
@@ -82,13 +72,11 @@ func (s *mergeService) MergeBytes(inputs [][]byte) ([]byte, error) {
 		inputPaths = append(inputPaths, tmpPath)
 	}
 
-	// Merge to output file
 	outputPath := tmpDir + "/merged.pdf"
 	if err := s.MergeFiles(inputPaths, outputPath); err != nil {
 		return nil, err
 	}
 
-	// Read output
 	output, err := os.ReadFile(outputPath)
 	if err != nil {
 		return nil, err
@@ -98,7 +86,6 @@ func (s *mergeService) MergeBytes(inputs [][]byte) ([]byte, error) {
 	return output, nil
 }
 
-// Utility for creating temp filename
 func tempPDFName(prefix string, index int) string {
 	buf := bytes.NewBufferString(prefix)
 	buf.WriteByte(byte('0' + index%10))

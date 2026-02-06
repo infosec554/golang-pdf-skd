@@ -27,7 +27,6 @@ func New(url string) Client {
 	return &gotenbergClient{baseURL: url}
 }
 
-// PDF -> Word
 func (g *gotenbergClient) PDFToWord(ctx context.Context, pdfPath string) ([]byte, error) {
 	file, err := os.Open(pdfPath)
 	if err != nil {
@@ -69,7 +68,6 @@ func (g *gotenbergClient) PDFToWord(ctx context.Context, pdfPath string) ([]byte
 	return io.ReadAll(resp.Body)
 }
 
-// Word -> PDF
 func (g *gotenbergClient) WordToPDF(ctx context.Context, wordPath string) ([]byte, error) {
 	file, err := os.Open(wordPath)
 	if err != nil {
@@ -111,7 +109,6 @@ func (g *gotenbergClient) WordToPDF(ctx context.Context, wordPath string) ([]byt
 	return io.ReadAll(resp.Body)
 }
 
-// Excel -> PDF
 func (g *gotenbergClient) ExcelToPDF(ctx context.Context, excelPath string) ([]byte, error) {
 	file, err := os.Open(excelPath)
 	if err != nil {
@@ -153,7 +150,6 @@ func (g *gotenbergClient) ExcelToPDF(ctx context.Context, excelPath string) ([]b
 	return io.ReadAll(resp.Body)
 }
 
-// PowerPoint -> PDF
 func (g *gotenbergClient) PowerPointToPDF(ctx context.Context, pptPath string) ([]byte, error) {
 	file, err := os.Open(pptPath)
 	if err != nil {

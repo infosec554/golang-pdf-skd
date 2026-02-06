@@ -11,17 +11,12 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// WatermarkService adds watermarks to PDF documents
 type WatermarkService interface {
-	// AddWatermark adds text watermark to PDF
 	AddWatermark(input io.Reader, text string, options *WatermarkOptions) ([]byte, error)
-	// AddWatermarkFile adds watermark to PDF file
 	AddWatermarkFile(inputPath, outputPath, text string, options *WatermarkOptions) error
-	// AddWatermarkBytes adds watermark to PDF bytes
 	AddWatermarkBytes(input []byte, text string, options *WatermarkOptions) ([]byte, error)
 }
 
-// WatermarkOptions configures watermark appearance
 type WatermarkOptions struct {
 	FontSize int     // Default: 48
 	Position string  // "diagonal", "center", "top", "bottom"
@@ -33,14 +28,12 @@ type watermarkService struct {
 	log logger.ILogger
 }
 
-// NewWatermarkService creates a new watermark service
 func NewWatermarkService(log logger.ILogger) WatermarkService {
 	return &watermarkService{
 		log: log,
 	}
 }
 
-// DefaultWatermarkOptions returns default watermark options
 func DefaultWatermarkOptions() *WatermarkOptions {
 	return &WatermarkOptions{
 		FontSize: 48,
@@ -50,7 +43,6 @@ func DefaultWatermarkOptions() *WatermarkOptions {
 	}
 }
 
-// AddWatermark adds watermark from reader
 func (s *watermarkService) AddWatermark(input io.Reader, text string, options *WatermarkOptions) ([]byte, error) {
 	s.log.Info("WatermarkService.AddWatermark called", logger.String("text", text))
 
@@ -62,7 +54,6 @@ func (s *watermarkService) AddWatermark(input io.Reader, text string, options *W
 	return s.AddWatermarkBytes(inputBytes, text, options)
 }
 
-// AddWatermarkFile adds watermark to file
 func (s *watermarkService) AddWatermarkFile(inputPath, outputPath, text string, options *WatermarkOptions) error {
 	s.log.Info("WatermarkService.AddWatermarkFile called", logger.String("input", inputPath))
 
@@ -70,7 +61,6 @@ func (s *watermarkService) AddWatermarkFile(inputPath, outputPath, text string, 
 		options = DefaultWatermarkOptions()
 	}
 
-	// Copy input to output first
 	inputBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		return err
@@ -79,13 +69,11 @@ func (s *watermarkService) AddWatermarkFile(inputPath, outputPath, text string, 
 		return err
 	}
 
-	// Calculate rotation based on position
 	rotation := 45
 	if options.Position == "center" {
 		rotation = 0
 	}
 
-	// Build watermark description
 	wmDesc := fmt.Sprintf("%s, font:Helvetica, points:%d, color:%s, opacity:%.1f, rotation:%d, scale:1.0 abs, position:c",
 		text, options.FontSize, options.Color, options.Opacity, rotation)
 
@@ -106,7 +94,6 @@ func (s *watermarkService) AddWatermarkFile(inputPath, outputPath, text string, 
 	return nil
 }
 
-// AddWatermarkBytes adds watermark to PDF bytes
 func (s *watermarkService) AddWatermarkBytes(input []byte, text string, options *WatermarkOptions) ([]byte, error) {
 	s.log.Info("WatermarkService.AddWatermarkBytes called")
 
@@ -114,7 +101,6 @@ func (s *watermarkService) AddWatermarkBytes(input []byte, text string, options 
 		options = DefaultWatermarkOptions()
 	}
 
-	// Create temp files
 	tmpInput, err := os.CreateTemp("", "pdf-watermark-*.pdf")
 	if err != nil {
 		return nil, err
@@ -128,19 +114,16 @@ func (s *watermarkService) AddWatermarkBytes(input []byte, text string, options 
 	defer os.Remove(tmpOutput.Name())
 	tmpOutput.Close()
 
-	// Write input
 	if _, err := tmpInput.Write(input); err != nil {
 		tmpInput.Close()
 		return nil, err
 	}
 	tmpInput.Close()
 
-	// Add watermark
 	if err := s.AddWatermarkFile(tmpInput.Name(), tmpOutput.Name(), text, options); err != nil {
 		return nil, err
 	}
 
-	// Read output
 	output, err := os.ReadFile(tmpOutput.Name())
 	if err != nil {
 		return nil, err

@@ -8,21 +8,16 @@ import (
 	"github.com/spf13/cast"
 )
 
-// Config - SDK configuration
 type Config struct {
-	// Service settings
 	ServiceName string
 	LoggerLevel string
 
-	// Gotenberg PDF engine URL
 	GotenbergURL string
 
-	// HTTP Server settings (optional, for API mode)
 	AppHost string
 	AppPort string
 }
 
-// Load loads configuration from environment variables
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("No .env file found, using defaults")
@@ -41,7 +36,6 @@ func Load() *Config {
 	return cfg
 }
 
-// NewWithURL creates a new config with custom Gotenberg URL
 func NewWithURL(gotenbergURL string) *Config {
 	return &Config{
 		ServiceName:  "golang-pdf-sdk",

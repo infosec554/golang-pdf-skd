@@ -9,13 +9,9 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// PowerPointToPDFService converts PowerPoint presentations to PDF
 type PowerPointToPDFService interface {
-	// Convert converts PowerPoint to PDF bytes
 	Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error)
-	// ConvertFile converts PowerPoint file to PDF file
 	ConvertFile(ctx context.Context, inputPath, outputPath string) error
-	// ConvertBytes converts PowerPoint bytes to PDF bytes
 	ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error)
 }
 
@@ -24,7 +20,6 @@ type powerPointToPDFService struct {
 	gotClient gotenberg.Client
 }
 
-// NewPowerPointToPDFService creates a new PowerPoint to PDF service
 func NewPowerPointToPDFService(log logger.ILogger, gotClient gotenberg.Client) PowerPointToPDFService {
 	return &powerPointToPDFService{
 		log:       log,
@@ -32,7 +27,6 @@ func NewPowerPointToPDFService(log logger.ILogger, gotClient gotenberg.Client) P
 	}
 }
 
-// Convert converts PowerPoint from reader to PDF bytes
 func (s *powerPointToPDFService) Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error) {
 	s.log.Info("PowerPointToPDFService.Convert called", logger.String("filename", filename))
 
@@ -45,7 +39,6 @@ func (s *powerPointToPDFService) Convert(ctx context.Context, input io.Reader, f
 	return s.ConvertBytes(ctx, inputBytes, filename)
 }
 
-// ConvertFile converts PowerPoint file to PDF file
 func (s *powerPointToPDFService) ConvertFile(ctx context.Context, inputPath, outputPath string) error {
 	s.log.Info("PowerPointToPDFService.ConvertFile called", logger.String("input", inputPath))
 
@@ -64,11 +57,9 @@ func (s *powerPointToPDFService) ConvertFile(ctx context.Context, inputPath, out
 	return nil
 }
 
-// ConvertBytes converts PowerPoint bytes to PDF bytes
 func (s *powerPointToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
 	s.log.Info("PowerPointToPDFService.ConvertBytes called")
 
-	// Create temp file for input
 	ext := ".pptx"
 	if len(filename) > 4 {
 		ext = filename[len(filename)-5:]
@@ -85,7 +76,6 @@ func (s *powerPointToPDFService) ConvertBytes(ctx context.Context, input []byte,
 	}
 	tmpInput.Close()
 
-	// Convert using Gotenberg
 	resultBytes, err := s.gotClient.PowerPointToPDF(ctx, tmpInput.Name())
 	if err != nil {
 		s.log.Error("Gotenberg conversion failed", logger.Error(err))

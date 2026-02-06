@@ -9,13 +9,9 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// ExcelToPDFService converts Excel spreadsheets to PDF
 type ExcelToPDFService interface {
-	// Convert converts Excel to PDF bytes
 	Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error)
-	// ConvertFile converts Excel file to PDF file
 	ConvertFile(ctx context.Context, inputPath, outputPath string) error
-	// ConvertBytes converts Excel bytes to PDF bytes
 	ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error)
 }
 
@@ -24,7 +20,6 @@ type excelToPDFService struct {
 	gotClient gotenberg.Client
 }
 
-// NewExcelToPDFService creates a new Excel to PDF service
 func NewExcelToPDFService(log logger.ILogger, gotClient gotenberg.Client) ExcelToPDFService {
 	return &excelToPDFService{
 		log:       log,
@@ -32,7 +27,6 @@ func NewExcelToPDFService(log logger.ILogger, gotClient gotenberg.Client) ExcelT
 	}
 }
 
-// Convert converts Excel from reader to PDF bytes
 func (s *excelToPDFService) Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error) {
 	s.log.Info("ExcelToPDFService.Convert called", logger.String("filename", filename))
 
@@ -45,7 +39,6 @@ func (s *excelToPDFService) Convert(ctx context.Context, input io.Reader, filena
 	return s.ConvertBytes(ctx, inputBytes, filename)
 }
 
-// ConvertFile converts Excel file to PDF file
 func (s *excelToPDFService) ConvertFile(ctx context.Context, inputPath, outputPath string) error {
 	s.log.Info("ExcelToPDFService.ConvertFile called", logger.String("input", inputPath))
 
@@ -64,11 +57,9 @@ func (s *excelToPDFService) ConvertFile(ctx context.Context, inputPath, outputPa
 	return nil
 }
 
-// ConvertBytes converts Excel bytes to PDF bytes
 func (s *excelToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
 	s.log.Info("ExcelToPDFService.ConvertBytes called")
 
-	// Create temp file for input
 	ext := ".xlsx"
 	if len(filename) > 4 {
 		ext = filename[len(filename)-5:]
@@ -85,7 +76,6 @@ func (s *excelToPDFService) ConvertBytes(ctx context.Context, input []byte, file
 	}
 	tmpInput.Close()
 
-	// Convert using Gotenberg
 	resultBytes, err := s.gotClient.ExcelToPDF(ctx, tmpInput.Name())
 	if err != nil {
 		s.log.Error("Gotenberg conversion failed", logger.Error(err))

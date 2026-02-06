@@ -9,13 +9,9 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// WordToPDFService converts Word documents to PDF
 type WordToPDFService interface {
-	// Convert converts Word document to PDF bytes
 	Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error)
-	// ConvertFile converts Word file to PDF
 	ConvertFile(ctx context.Context, inputPath, outputPath string) error
-	// ConvertBytes converts Word bytes to PDF bytes
 	ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error)
 }
 
@@ -24,7 +20,6 @@ type wordToPDFService struct {
 	gotClient gotenberg.Client
 }
 
-// NewWordToPDFService creates a new Word to PDF service
 func NewWordToPDFService(log logger.ILogger, gotClient gotenberg.Client) WordToPDFService {
 	return &wordToPDFService{
 		log:       log,
@@ -32,11 +27,9 @@ func NewWordToPDFService(log logger.ILogger, gotClient gotenberg.Client) WordToP
 	}
 }
 
-// Convert converts Word document from reader to PDF bytes
 func (s *wordToPDFService) Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error) {
 	s.log.Info("WordToPDFService.Convert called", logger.String("filename", filename))
 
-	// Read input to bytes
 	inputBytes, err := io.ReadAll(input)
 	if err != nil {
 		s.log.Error("Failed to read input", logger.Error(err))
@@ -46,7 +39,6 @@ func (s *wordToPDFService) Convert(ctx context.Context, input io.Reader, filenam
 	return s.ConvertBytes(ctx, inputBytes, filename)
 }
 
-// ConvertFile converts Word file to PDF file
 func (s *wordToPDFService) ConvertFile(ctx context.Context, inputPath, outputPath string) error {
 	s.log.Info("WordToPDFService.ConvertFile called", logger.String("input", inputPath))
 
@@ -65,11 +57,9 @@ func (s *wordToPDFService) ConvertFile(ctx context.Context, inputPath, outputPat
 	return nil
 }
 
-// ConvertBytes converts Word bytes to PDF bytes
 func (s *wordToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
 	s.log.Info("WordToPDFService.ConvertBytes called")
 
-	// Create temp file for input
 	tmpInput, err := os.CreateTemp("", "word-input-*"+getExtension(filename))
 	if err != nil {
 		return nil, err
@@ -82,7 +72,6 @@ func (s *wordToPDFService) ConvertBytes(ctx context.Context, input []byte, filen
 	}
 	tmpInput.Close()
 
-	// Convert using Gotenberg
 	resultBytes, err := s.gotClient.WordToPDF(ctx, tmpInput.Name())
 	if err != nil {
 		s.log.Error("Gotenberg conversion failed", logger.Error(err))
@@ -93,7 +82,6 @@ func (s *wordToPDFService) ConvertBytes(ctx context.Context, input []byte, filen
 	return resultBytes, nil
 }
 
-// getExtension extracts file extension
 func getExtension(filename string) string {
 	for i := len(filename) - 1; i >= 0; i-- {
 		if filename[i] == '.' {

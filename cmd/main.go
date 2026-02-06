@@ -1,5 +1,3 @@
-// Example usage of the Golang PDF SDK
-// Run with: go run cmd/main.go
 
 package main
 
@@ -14,10 +12,8 @@ func main() {
 	fmt.Println("🚀 Golang PDF SDK - Examples")
 	fmt.Println("==============================")
 
-	// Initialize SDK with Gotenberg URL
 	pdf := pdfsdk.New("http://localhost:3000")
 
-	// Example 1: Compress PDF
 	fmt.Println("\n📦 1. PDF Compression:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Compress().CompressBytes(input)
@@ -32,7 +28,6 @@ func main() {
 		fmt.Println("   ⚠️  test.pdf not found, skipped")
 	}
 
-	// Example 2: Rotate PDF
 	fmt.Println("\n🔄 2. PDF Rotation (90°):")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Rotate().RotateBytes(input, 90, "all")
@@ -46,7 +41,6 @@ func main() {
 		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Example 3: Add Watermark
 	fmt.Println("\n💧 3. Add Watermark:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Watermark().AddWatermarkBytes(input, "CONFIDENTIAL", nil)
@@ -60,7 +54,6 @@ func main() {
 		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Example 4: Protect PDF
 	fmt.Println("\n🔒 4. Protect PDF:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Protect().ProtectBytes(input, "password123")
@@ -74,7 +67,6 @@ func main() {
 		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Example 5: PDF to JPG
 	fmt.Println("\n🖼️  5. PDF to JPG Images:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		images, err := pdf.PDFToJPG().ConvertToImages(input)

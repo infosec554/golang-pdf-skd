@@ -5,23 +5,17 @@ import (
 	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-// PDFService - main SDK interface for PDF operations
 type PDFService interface {
-	// Conversion
 	WordToPDF() WordToPDFService
 	ExcelToPDF() ExcelToPDFService
 	PowerPointToPDF() PowerPointToPDFService
 	JPGToPDF() JPGToPDFService
 	PDFToJPG() PDFToJPGService
-
-	// Manipulation
 	Compress() CompressService
 	Merge() MergeService
 	Split() SplitService
 	Rotate() RotateService
 	Watermark() WatermarkService
-
-	// Security
 	Protect() ProtectService
 	Unlock() UnlockService
 }
@@ -43,7 +37,6 @@ type pdfService struct {
 	gotClient       gotenberg.Client
 }
 
-// New creates a new PDF Service instance
 func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
 	return &pdfService{
 		wordToPDF:       NewWordToPDFService(log, gotClient),
@@ -63,7 +56,6 @@ func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
 	}
 }
 
-// NewWithGotenberg creates PDF service with Gotenberg URL
 func NewWithGotenberg(gotenbergURL string) PDFService {
 	log := logger.New("golang-pdf-sdk")
 	gotClient := gotenberg.New(gotenbergURL)
