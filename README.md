@@ -1,18 +1,21 @@
 # 📄 Golang PDF SDK
 
-Go dasturlash tilida PDF fayllari bilan ishlash uchun kuchli va oson SDK.
+A powerful and easy-to-use Go SDK for PDF operations including compression, merging, splitting, rotation, watermarking, and more.
 
-## 🚀 O'rnatish
+[![Go Reference](https://pkg.go.dev/badge/github.com/infosec554/golang-pdf-sdk.svg)](https://pkg.go.dev/github.com/infosec554/golang-pdf-sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## 🚀 Installation
 
 ```bash
 go get github.com/infosec554/golang-pdf-sdk
 ```
 
-## 📋 Talablar
+## 📋 Requirements
 
 - **Go 1.21+**
-- **Gotenberg** (Word/Excel/PowerPoint konvertatsiya uchun) - [gotenberg.dev](https://gotenberg.dev)
-- **pdftoppm** (PDF dan JPG uchun) - poppler-utils paketi
+- **Gotenberg** (for Word/Excel/PowerPoint conversion) - [gotenberg.dev](https://gotenberg.dev)
+- **pdftoppm** (for PDF to JPG) - part of poppler-utils
 
 ```bash
 # Ubuntu/Debian
@@ -21,11 +24,11 @@ sudo apt-get install poppler-utils
 # macOS
 brew install poppler
 
-# Gotenberg docker orqali
+# Run Gotenberg with Docker
 docker run -d -p 3000:3000 gotenberg/gotenberg:8
 ```
 
-## 💡 Tez Boshlash
+## 💡 Quick Start
 
 ```go
 package main
@@ -33,220 +36,220 @@ package main
 import (
     "fmt"
     "os"
-    
+
     pdfsdk "github.com/infosec554/golang-pdf-sdk"
 )
 
 func main() {
-    // SDK ni ishga tushirish
+    // Initialize SDK
     pdf := pdfsdk.New("http://localhost:3000")
-    
-    // PDF faylni o'qish
-    input, _ := os.ReadFile("fayl.pdf")
-    
-    // Kompressiya qilish
+
+    // Read input PDF
+    input, _ := os.ReadFile("document.pdf")
+
+    // Compress the PDF
     output, err := pdf.Compress().CompressBytes(input)
     if err != nil {
         panic(err)
     }
-    
-    // Natijani saqlash
-    os.WriteFile("kichik.pdf", output, 0644)
-    
-    fmt.Printf("Hajmi: %d -> %d bayt\n", len(input), len(output))
+
+    // Save result
+    os.WriteFile("compressed.pdf", output, 0644)
+
+    fmt.Printf("Size: %d -> %d bytes\n", len(input), len(output))
 }
 ```
 
 ---
 
-## 📚 Barcha Funksiyalar
+## 📚 API Reference
 
-### 1️⃣ PDF Kompressiya
+### 1️⃣ Compress PDF
 
-PDF hajmini kamaytirish:
+Reduce PDF file size:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
 
-// Baytlar bilan ishlash
-input, _ := os.ReadFile("katta.pdf")
+// From bytes
+input, _ := os.ReadFile("large.pdf")
 output, err := pdf.Compress().CompressBytes(input)
 
-// Fayl bilan ishlash
+// From file
 err := pdf.Compress().CompressFile("input.pdf", "output.pdf")
 ```
 
 ---
 
-### 2️⃣ PDF Birlashtirish (Merge)
+### 2️⃣ Merge PDFs
 
-Bir nechta PDF larni birlashtirib bitta PDF qilish:
+Combine multiple PDFs into one:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
 
-// Baytlar bilan
-pdf1, _ := os.ReadFile("1.pdf")
-pdf2, _ := os.ReadFile("2.pdf")
-pdf3, _ := os.ReadFile("3.pdf")
+// From bytes
+pdf1, _ := os.ReadFile("doc1.pdf")
+pdf2, _ := os.ReadFile("doc2.pdf")
+pdf3, _ := os.ReadFile("doc3.pdf")
 
 output, err := pdf.Merge().MergeBytes([][]byte{pdf1, pdf2, pdf3})
-os.WriteFile("birlashgan.pdf", output, 0644)
+os.WriteFile("merged.pdf", output, 0644)
 
-// Fayllar bilan
+// From files
 err := pdf.Merge().MergeFiles(
-    []string{"1.pdf", "2.pdf", "3.pdf"}, 
-    "birlashgan.pdf",
+    []string{"doc1.pdf", "doc2.pdf", "doc3.pdf"},
+    "merged.pdf",
 )
 ```
 
 ---
 
-### 3️⃣ PDF Bo'lish (Split)
+### 3️⃣ Split PDF
 
-PDF ni sahifalar bo'yicha bo'lish:
+Extract pages from PDF:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("kitob.pdf")
+input, _ := os.ReadFile("book.pdf")
 
-// Sahifa diapazonlari bo'yicha (ZIP qaytaradi)
+// Split by page ranges (returns ZIP)
 zipBytes, err := pdf.Split().SplitBytes(input, "1-5,6-10,11-20")
-os.WriteFile("qismlar.zip", zipBytes, 0644)
+os.WriteFile("parts.zip", zipBytes, 0644)
 
-// Har bir sahifani alohida olish
+// Split into individual pages
 pages, err := pdf.Split().SplitToPages(input)
 for i, page := range pages {
-    os.WriteFile(fmt.Sprintf("sahifa_%d.pdf", i+1), page, 0644)
+    os.WriteFile(fmt.Sprintf("page_%d.pdf", i+1), page, 0644)
 }
 ```
 
 ---
 
-### 4️⃣ PDF Aylantirish (Rotate)
+### 4️⃣ Rotate PDF
 
-Sahifalarni 90°, 180°, 270° ga aylantirish:
+Rotate pages by 90°, 180°, or 270°:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("fayl.pdf")
+input, _ := os.ReadFile("document.pdf")
 
-// Barcha sahifalarni 90° ga aylantirish
+// Rotate all pages 90°
 output, err := pdf.Rotate().RotateBytes(input, 90, "all")
 
-// Faqat 1-3 sahifalarni 180° ga
+// Rotate specific pages 180°
 output, err := pdf.Rotate().RotateBytes(input, 180, "1-3")
 
-// Fayl bilan
+// From file
 err := pdf.Rotate().RotateFile("input.pdf", "output.pdf", 270, "all")
 ```
 
 ---
 
-### 5️⃣ Watermark (Suv belgisi)
+### 5️⃣ Add Watermark
 
-PDF ga matn watermark qo'shish:
+Add text watermark to PDF:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("hujjat.pdf")
+input, _ := os.ReadFile("document.pdf")
 
-// Oddiy watermark
-output, err := pdf.Watermark().AddWatermarkBytes(input, "MAXFIY", nil)
+// Simple watermark
+output, err := pdf.Watermark().AddWatermarkBytes(input, "CONFIDENTIAL", nil)
 
-// Sozlamalar bilan
+// With custom options
 options := &service.WatermarkOptions{
-    FontSize: 72,           // Shrift o'lchami
-    Position: "diagonal",   // "diagonal", "center"
-    Opacity:  0.3,          // Shaffoflik (0.0 - 1.0)
-    Color:    "red",        // Rang
+    FontSize: 72,           // Font size
+    Position: "diagonal",   // "diagonal" or "center"
+    Opacity:  0.3,          // 0.0 to 1.0
+    Color:    "red",        // Color name
 }
-output, err := pdf.Watermark().AddWatermarkBytes(input, "QORALAMA", options)
+output, err := pdf.Watermark().AddWatermarkBytes(input, "DRAFT", options)
 ```
 
 ---
 
-### 6️⃣ PDF Himoyalash (Parol qo'yish)
+### 6️⃣ Protect PDF (Add Password)
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("maxfiy.pdf")
+input, _ := os.ReadFile("secret.pdf")
 
-// Parol qo'yish
-protected, err := pdf.Protect().ProtectBytes(input, "parol123")
-os.WriteFile("himoyalangan.pdf", protected, 0644)
+// Add password protection
+protected, err := pdf.Protect().ProtectBytes(input, "mypassword123")
+os.WriteFile("protected.pdf", protected, 0644)
 
-// Fayl bilan
-err := pdf.Protect().ProtectFile("input.pdf", "protected.pdf", "parol123")
+// From file
+err := pdf.Protect().ProtectFile("input.pdf", "protected.pdf", "mypassword123")
 ```
 
 ---
 
-### 7️⃣ PDF Qulfini Ochish
+### 7️⃣ Unlock PDF (Remove Password)
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("himoyalangan.pdf")
+input, _ := os.ReadFile("protected.pdf")
 
-// Parolni olib tashlash
-unlocked, err := pdf.Unlock().UnlockBytes(input, "parol123")
-os.WriteFile("ochilgan.pdf", unlocked, 0644)
+// Remove password
+unlocked, err := pdf.Unlock().UnlockBytes(input, "mypassword123")
+os.WriteFile("unlocked.pdf", unlocked, 0644)
 ```
 
 ---
 
-### 8️⃣ PDF dan Rasm (JPG)
+### 8️⃣ PDF to Images (JPG)
 
-PDF sahifalarini JPG rasmlarga aylantirish:
+Convert PDF pages to JPG images:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
-input, _ := os.ReadFile("prezentatsiya.pdf")
+input, _ := os.ReadFile("presentation.pdf")
 
-// ZIP fayl olish (barcha rasmlar ichida)
+// Get ZIP file containing all images
 zipBytes, err := pdf.PDFToJPG().ConvertBytes(input)
-os.WriteFile("rasmlar.zip", zipBytes, 0644)
+os.WriteFile("images.zip", zipBytes, 0644)
 
-// Har bir rasmni alohida olish
+// Get individual images
 images, err := pdf.PDFToJPG().ConvertToImages(input)
 for i, img := range images {
-    os.WriteFile(fmt.Sprintf("sahifa_%d.jpg", i+1), img, 0644)
+    os.WriteFile(fmt.Sprintf("page_%d.jpg", i+1), img, 0644)
 }
 ```
 
 ---
 
-### 9️⃣ Rasmlardan PDF
+### 9️⃣ Images to PDF
 
-JPG/PNG rasmlarni bitta PDF ga birlashtirish:
+Combine JPG/PNG images into a single PDF:
 
 ```go
 pdf := pdfsdk.New("http://localhost:3000")
 
-// Rasm fayllarini o'qish
-img1, _ := os.ReadFile("rasm1.jpg")
-img2, _ := os.ReadFile("rasm2.png")
-img3, _ := os.ReadFile("rasm3.jpg")
+// Read images
+img1, _ := os.ReadFile("photo1.jpg")
+img2, _ := os.ReadFile("photo2.png")
+img3, _ := os.ReadFile("photo3.jpg")
 
-// PDF yaratish
+// Create PDF
 pdfBytes, err := pdf.JPGToPDF().ConvertMultipleBytes(
     [][]byte{img1, img2, img3},
-    []string{"rasm1.jpg", "rasm2.png", "rasm3.jpg"},
+    []string{"photo1.jpg", "photo2.png", "photo3.jpg"},
 )
-os.WriteFile("rasmlar.pdf", pdfBytes, 0644)
+os.WriteFile("album.pdf", pdfBytes, 0644)
 
-// Fayllar bilan
+// From files
 err := pdf.JPGToPDF().ConvertFiles(
     []string{"1.jpg", "2.jpg", "3.png"},
-    "albom.pdf",
+    "album.pdf",
 )
 ```
 
 ---
 
-### 🔟 Word/Excel/PowerPoint → PDF
+### 🔟 Document Conversion (Requires Gotenberg)
 
-**⚠️ Gotenberg kerak!**
+Convert Word, Excel, PowerPoint to PDF:
 
 ```go
 import "context"
@@ -254,24 +257,24 @@ import "context"
 pdf := pdfsdk.New("http://localhost:3000")
 ctx := context.Background()
 
-// Word → PDF
-docxBytes, _ := os.ReadFile("hujjat.docx")
-pdfBytes, err := pdf.WordToPDF().ConvertBytes(ctx, docxBytes, "hujjat.docx")
+// Word to PDF
+docxBytes, _ := os.ReadFile("document.docx")
+pdfBytes, err := pdf.WordToPDF().ConvertBytes(ctx, docxBytes, "document.docx")
 
-// Excel → PDF  
-xlsxBytes, _ := os.ReadFile("jadval.xlsx")
-pdfBytes, err := pdf.ExcelToPDF().ConvertBytes(ctx, xlsxBytes, "jadval.xlsx")
+// Excel to PDF
+xlsxBytes, _ := os.ReadFile("spreadsheet.xlsx")
+pdfBytes, err := pdf.ExcelToPDF().ConvertBytes(ctx, xlsxBytes, "spreadsheet.xlsx")
 
-// PowerPoint → PDF
-pptxBytes, _ := os.ReadFile("slayd.pptx")
-pdfBytes, err := pdf.PowerPointToPDF().ConvertBytes(ctx, pptxBytes, "slayd.pptx")
+// PowerPoint to PDF
+pptxBytes, _ := os.ReadFile("slides.pptx")
+pdfBytes, err := pdf.PowerPointToPDF().ConvertBytes(ctx, pptxBytes, "slides.pptx")
 ```
 
 ---
 
-## 🔧 Sozlamalar
+## 🔧 Configuration
 
-`.env` fayl orqali:
+Using `.env` file:
 
 ```env
 GOTENBERG_URL=http://localhost:3000
@@ -281,36 +284,36 @@ LOGGER_LEVEL=info
 
 ---
 
-## 📦 Loyiha Strukturasi
+## 📦 Project Structure
 
 ```
 golang-pdf-sdk/
-├── pdfsdk.go           # Asosiy SDK entry point
-├── config/             # Konfiguratsiya
+├── pdfsdk.go              # Main SDK entry point
+├── config/config.go       # Configuration
 ├── pkg/
-│   ├── gotenberg/      # Gotenberg client
-│   └── logger/         # Logger
+│   ├── gotenberg/         # Gotenberg HTTP client
+│   └── logger/            # Logging utilities
 └── service/
-    ├── compress.go     # PDF kompressiya
-    ├── merge.go        # PDF birlashtirish
-    ├── split.go        # PDF bo'lish
-    ├── rotate.go       # PDF aylantirish
-    ├── watermark.go    # Watermark qo'shish
-    ├── protect.go      # Parol qo'yish
-    ├── unlock.go       # Parolni ochish
-    ├── pdf_to_jpg.go   # PDF → JPG
-    ├── jpgtopdf.go     # JPG → PDF
-    ├── word_to_pdf.go  # Word → PDF
-    ├── excel_to_pdf.go # Excel → PDF
-    └── powerpoint.go   # PPT → PDF
+    ├── compress.go        # PDF compression
+    ├── merge_service.go   # Merge multiple PDFs
+    ├── split.go           # Split PDF by pages
+    ├── rotate.go          # Rotate PDF pages
+    ├── watermark.go       # Add text watermark
+    ├── protect.go         # Password protect PDF
+    ├── unlock.go          # Remove password
+    ├── pdf_to_jpg.go      # PDF to JPG images
+    ├── jpgtopdf.go        # Images to PDF
+    ├── word_to_pdf.go     # Word to PDF
+    ├── excel_to_pdf.go    # Excel to PDF
+    └── powerpoint_to_pdf.go # PowerPoint to PDF
 ```
 
 ---
 
-## 📄 Litsenziya
+## 📄 License
 
-MIT License - batafsil [LICENSE](LICENSE) ga qarang.
+MIT License - see [LICENSE](LICENSE) for details.
 
-## 🤝 Hissa Qo'shish
+## 🤝 Contributing
 
-Pull Request lar qabul qilinadi!
+Pull requests are welcome!

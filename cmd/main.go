@@ -1,5 +1,5 @@
-// Bu fayl SDK dan foydalanish namunasi
-// go run cmd/main.go bilan ishga tushiring
+// Example usage of the Golang PDF SDK
+// Run with: go run cmd/main.go
 
 package main
 
@@ -11,87 +11,87 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Golang PDF SDK - Namunalar")
-	fmt.Println("================================")
+	fmt.Println("🚀 Golang PDF SDK - Examples")
+	fmt.Println("==============================")
 
-	// SDK ni ishga tushirish (Gotenberg URL)
+	// Initialize SDK with Gotenberg URL
 	pdf := pdfsdk.New("http://localhost:3000")
 
-	// Namuna 1: Kompressiya
-	fmt.Println("\n📦 1. PDF Kompressiya:")
+	// Example 1: Compress PDF
+	fmt.Println("\n📦 1. PDF Compression:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Compress().CompressBytes(input)
 		if err != nil {
-			fmt.Println("   ❌ Xato:", err)
+			fmt.Println("   ❌ Error:", err)
 		} else {
 			os.WriteFile("compressed.pdf", output, 0644)
 			saving := 100 - (float64(len(output))/float64(len(input)))*100
-			fmt.Printf("   ✅ %d → %d bayt (%.1f%% tejaldi)\n", len(input), len(output), saving)
+			fmt.Printf("   ✅ %d → %d bytes (%.1f%% saved)\n", len(input), len(output), saving)
 		}
 	} else {
-		fmt.Println("   ⚠️  test.pdf topilmadi, o'tkazib yuborildi")
+		fmt.Println("   ⚠️  test.pdf not found, skipped")
 	}
 
-	// Namuna 2: Aylantirish
-	fmt.Println("\n🔄 2. PDF Aylantirish (90°):")
+	// Example 2: Rotate PDF
+	fmt.Println("\n🔄 2. PDF Rotation (90°):")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		output, err := pdf.Rotate().RotateBytes(input, 90, "all")
 		if err != nil {
-			fmt.Println("   ❌ Xato:", err)
+			fmt.Println("   ❌ Error:", err)
 		} else {
 			os.WriteFile("rotated.pdf", output, 0644)
-			fmt.Println("   ✅ rotated.pdf yaratildi")
+			fmt.Println("   ✅ Created rotated.pdf")
 		}
 	} else {
-		fmt.Println("   ⚠️  test.pdf topilmadi")
+		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Namuna 3: Watermark
-	fmt.Println("\n💧 3. Watermark qo'shish:")
+	// Example 3: Add Watermark
+	fmt.Println("\n💧 3. Add Watermark:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
-		output, err := pdf.Watermark().AddWatermarkBytes(input, "MAXFIY HUJJAT", nil)
+		output, err := pdf.Watermark().AddWatermarkBytes(input, "CONFIDENTIAL", nil)
 		if err != nil {
-			fmt.Println("   ❌ Xato:", err)
+			fmt.Println("   ❌ Error:", err)
 		} else {
 			os.WriteFile("watermarked.pdf", output, 0644)
-			fmt.Println("   ✅ watermarked.pdf yaratildi")
+			fmt.Println("   ✅ Created watermarked.pdf")
 		}
 	} else {
-		fmt.Println("   ⚠️  test.pdf topilmadi")
+		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Namuna 4: Himoyalash
-	fmt.Println("\n🔒 4. PDF Himoyalash:")
+	// Example 4: Protect PDF
+	fmt.Println("\n🔒 4. Protect PDF:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
-		output, err := pdf.Protect().ProtectBytes(input, "parol123")
+		output, err := pdf.Protect().ProtectBytes(input, "password123")
 		if err != nil {
-			fmt.Println("   ❌ Xato:", err)
+			fmt.Println("   ❌ Error:", err)
 		} else {
 			os.WriteFile("protected.pdf", output, 0644)
-			fmt.Println("   ✅ protected.pdf yaratildi (parol: parol123)")
+			fmt.Println("   ✅ Created protected.pdf (password: password123)")
 		}
 	} else {
-		fmt.Println("   ⚠️  test.pdf topilmadi")
+		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	// Namuna 5: PDF dan JPG
-	fmt.Println("\n🖼️  5. PDF dan JPG:")
+	// Example 5: PDF to JPG
+	fmt.Println("\n🖼️  5. PDF to JPG Images:")
 	if input, err := os.ReadFile("test.pdf"); err == nil {
 		images, err := pdf.PDFToJPG().ConvertToImages(input)
 		if err != nil {
-			fmt.Println("   ❌ Xato:", err)
+			fmt.Println("   ❌ Error:", err)
 		} else {
 			os.MkdirAll("pages", 0755)
 			for i, img := range images {
-				os.WriteFile(fmt.Sprintf("pages/sahifa_%d.jpg", i+1), img, 0644)
+				os.WriteFile(fmt.Sprintf("pages/page_%d.jpg", i+1), img, 0644)
 			}
-			fmt.Printf("   ✅ %d ta rasm yaratildi (pages/ papkada)\n", len(images))
+			fmt.Printf("   ✅ Created %d images in pages/ folder\n", len(images))
 		}
 	} else {
-		fmt.Println("   ⚠️  test.pdf topilmadi")
+		fmt.Println("   ⚠️  test.pdf not found")
 	}
 
-	fmt.Println("\n================================")
-	fmt.Println("✅ Namunalar tugadi!")
-	fmt.Println("\n💡 Sinab ko'rish uchun 'test.pdf' faylini qo'ying")
+	fmt.Println("\n==============================")
+	fmt.Println("✅ Examples completed!")
+	fmt.Println("\n💡 Place a 'test.pdf' file to run all examples")
 }
