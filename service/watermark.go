@@ -1,169 +1,151 @@
 package service
 
 import (
-	"context"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
 
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// WatermarkService adds watermarks to PDF documents
 type WatermarkService interface {
-	Create(ctx context.Context, req models.WatermarkRequest, userID *string) (string, error)
-	GetByID(ctx context.Context, id string) (*models.WatermarkJob, error)
+	// AddWatermark adds text watermark to PDF
+	AddWatermark(input io.Reader, text string, options *WatermarkOptions) ([]byte, error)
+	// AddWatermarkFile adds watermark to PDF file
+	AddWatermarkFile(inputPath, outputPath, text string, options *WatermarkOptions) error
+	// AddWatermarkBytes adds watermark to PDF bytes
+	AddWatermarkBytes(input []byte, text string, options *WatermarkOptions) ([]byte, error)
+}
+
+// WatermarkOptions configures watermark appearance
+type WatermarkOptions struct {
+	FontSize int     // Default: 48
+	Position string  // "diagonal", "center", "top", "bottom"
+	Opacity  float64 // 0.0 to 1.0, default: 0.3
+	Color    string  // Default: "gray"
 }
 
 type watermarkService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewWatermarkService(stg storage.IStorage, log logger.ILogger) WatermarkService {
+// NewWatermarkService creates a new watermark service
+func NewWatermarkService(log logger.ILogger) WatermarkService {
 	return &watermarkService{
-		stg: stg,
 		log: log,
 	}
 }
 
-func (s *watermarkService) Create(ctx context.Context, req models.WatermarkRequest, userID *string) (string, error) {
-	s.log.Info("WatermarkService.Create called", logger.String("text", req.Text))
+// DefaultWatermarkOptions returns default watermark options
+func DefaultWatermarkOptions() *WatermarkOptions {
+	return &WatermarkOptions{
+		FontSize: 48,
+		Position: "diagonal",
+		Opacity:  0.3,
+		Color:    "gray",
+	}
+}
 
-	// 1. Kiruvchi faylni olish
-	file, err := s.stg.File().GetByID(ctx, req.InputFileID)
+// AddWatermark adds watermark from reader
+func (s *watermarkService) AddWatermark(input io.Reader, text string, options *WatermarkOptions) ([]byte, error) {
+	s.log.Info("WatermarkService.AddWatermark called", logger.String("text", text))
+
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("Input file not found", logger.String("fileID", req.InputFileID), logger.Error(err))
-		return "", err
+		return nil, err
 	}
 
-	// Fayl mavjudligini tekshirish
-	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-		s.log.Error("Input file does not exist", logger.String("filePath", file.FilePath))
-		return "", fmt.Errorf("input file does not exist: %s", file.FilePath)
+	return s.AddWatermarkBytes(inputBytes, text, options)
+}
+
+// AddWatermarkFile adds watermark to file
+func (s *watermarkService) AddWatermarkFile(inputPath, outputPath, text string, options *WatermarkOptions) error {
+	s.log.Info("WatermarkService.AddWatermarkFile called", logger.String("input", inputPath))
+
+	if options == nil {
+		options = DefaultWatermarkOptions()
 	}
 
-	// Default qiymatlar
-	fontSize := req.FontSize
-	if fontSize <= 0 {
-		fontSize = 48
-	}
-	position := req.Position
-	if position == "" {
-		position = "diagonal"
-	}
-	opacity := req.Opacity
-	if opacity <= 0 {
-		opacity = 0.3
-	}
-
-	// 2. Job yaratish
-	job := &models.WatermarkJob{
-		ID:          uuid.NewString(),
-		UserID:      userID,
-		InputFileID: req.InputFileID,
-		Text:        req.Text,
-		FontSize:    fontSize,
-		Position:    position,
-		Opacity:     opacity,
-		Status:      "pending",
-		CreatedAt:   time.Now(),
-	}
-
-	if err := s.stg.Watermark().Create(ctx, job); err != nil {
-		s.log.Error("Failed to create watermark job", logger.Error(err))
-		return "", err
-	}
-
-	// 3. Output fayl yo'lini tayyorlash
-	outputID := uuid.NewString()
-	outputDir := "storage/watermark"
-	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		s.log.Error("Failed to create output dir", logger.Error(err))
-		return "", err
-	}
-	outputPath := filepath.Join(outputDir, outputID+".pdf")
-
-	// 4. Faylni nusxalash
-	inputBytes, err := os.ReadFile(file.FilePath)
+	// Copy input to output first
+	inputBytes, err := os.ReadFile(inputPath)
 	if err != nil {
-		s.log.Error("Failed to read input file", logger.Error(err))
-		return "", err
+		return err
 	}
 	if err := os.WriteFile(outputPath, inputBytes, 0644); err != nil {
-		s.log.Error("Failed to write temp file", logger.Error(err))
-		return "", err
+		return err
 	}
 
-	// 5. pdfcpu bilan watermark qo'shish
-	// Watermark description: "text, font:Helvetica, points:48, color:gray, opacity:0.3, rotation:45, diagonal:1"
+	// Calculate rotation based on position
 	rotation := 45
-	if position == "center" {
+	if options.Position == "center" {
 		rotation = 0
 	}
-	
-	wmDesc := fmt.Sprintf("%s, font:Helvetica, points:%d, color:gray, opacity:%.1f, rotation:%d, scale:1.0 abs, position:c",
-		req.Text, fontSize, opacity, rotation)
+
+	// Build watermark description
+	wmDesc := fmt.Sprintf("%s, font:Helvetica, points:%d, color:%s, opacity:%.1f, rotation:%d, scale:1.0 abs, position:c",
+		text, options.FontSize, options.Color, options.Opacity, rotation)
 
 	wm, err := api.TextWatermark(wmDesc, "", true, false, types.POINTS)
 	if err != nil {
 		s.log.Error("Failed to create watermark", logger.Error(err))
 		os.Remove(outputPath)
-		return "", fmt.Errorf("watermark create failed: %w", err)
+		return fmt.Errorf("watermark create failed: %w", err)
 	}
 
 	if err := api.AddWatermarksFile(outputPath, "", nil, wm, nil); err != nil {
 		s.log.Error("pdfcpu watermark failed", logger.Error(err))
 		os.Remove(outputPath)
-		return "", fmt.Errorf("watermark failed: %w", err)
+		return fmt.Errorf("watermark failed: %w", err)
 	}
 
-	// 6. Natijaviy faylni sistemaga saqlash
-	fi, err := os.Stat(outputPath)
-	if err != nil {
-		s.log.Error("Cannot stat output file", logger.Error(err))
-		return "", err
-	}
-
-	newFile := models.File{
-		ID:         outputID,
-		UserID:     userID,
-		FileName:   fmt.Sprintf("watermark_%s", filepath.Base(file.FileName)),
-		FilePath:   outputPath,
-		FileType:   "application/pdf",
-		FileSize:   fi.Size(),
-		UploadedAt: time.Now(),
-	}
-
-	if _, err := s.stg.File().Save(ctx, newFile); err != nil {
-		s.log.Error("Failed to save output file", logger.Error(err))
-		return "", err
-	}
-
-	// 7. Jobni update qilish
-	job.OutputFileID = &outputID
-	job.Status = "done"
-
-	if err := s.stg.Watermark().Update(ctx, job); err != nil {
-		s.log.Error("Failed to update watermark job", logger.Error(err))
-		return "", err
-	}
-
-	s.log.Info("Watermark job completed", logger.String("jobID", job.ID))
-	return job.ID, nil
+	s.log.Info("Watermark added successfully", logger.String("output", outputPath))
+	return nil
 }
 
-func (s *watermarkService) GetByID(ctx context.Context, id string) (*models.WatermarkJob, error) {
-	job, err := s.stg.Watermark().GetByID(ctx, id)
+// AddWatermarkBytes adds watermark to PDF bytes
+func (s *watermarkService) AddWatermarkBytes(input []byte, text string, options *WatermarkOptions) ([]byte, error) {
+	s.log.Info("WatermarkService.AddWatermarkBytes called")
+
+	if options == nil {
+		options = DefaultWatermarkOptions()
+	}
+
+	// Create temp files
+	tmpInput, err := os.CreateTemp("", "pdf-watermark-*.pdf")
 	if err != nil {
-		s.log.Error("Failed to get watermark job", logger.Error(err))
 		return nil, err
 	}
-	return job, nil
+	defer os.Remove(tmpInput.Name())
+
+	tmpOutput, err := os.CreateTemp("", "pdf-watermark-out-*.pdf")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmpOutput.Name())
+	tmpOutput.Close()
+
+	// Write input
+	if _, err := tmpInput.Write(input); err != nil {
+		tmpInput.Close()
+		return nil, err
+	}
+	tmpInput.Close()
+
+	// Add watermark
+	if err := s.AddWatermarkFile(tmpInput.Name(), tmpOutput.Name(), text, options); err != nil {
+		return nil, err
+	}
+
+	// Read output
+	output, err := os.ReadFile(tmpOutput.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("Watermark added", logger.Int("outputSize", len(output)))
+	return output, nil
 }

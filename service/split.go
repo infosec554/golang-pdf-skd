@@ -1,165 +1,195 @@
 package service
 
 import (
-	"context"
+	"archive/zip"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// SplitService splits PDF into multiple parts
 type SplitService interface {
-	Create(ctx context.Context, req models.CreateSplitJobRequest, userID *string) (string, error)
-	GetByID(ctx context.Context, id string) (*models.SplitJob, error)
+	// Split splits PDF by page ranges and returns ZIP containing parts
+	Split(input io.Reader, ranges string) ([]byte, error)
+	// SplitFile splits PDF file by page ranges into output directory
+	SplitFile(inputPath, outputDir string, ranges string) ([]string, error)
+	// SplitBytes splits PDF bytes by page ranges
+	SplitBytes(input []byte, ranges string) ([]byte, error)
+	// SplitToPages splits PDF into individual pages
+	SplitToPages(input []byte) ([][]byte, error)
 }
 
 type splitService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewSplitService(stg storage.IStorage, log logger.ILogger) SplitService {
+// NewSplitService creates a new split service
+func NewSplitService(log logger.ILogger) SplitService {
 	return &splitService{
-		stg: stg,
 		log: log,
 	}
 }
 
-func (s *splitService) Create(ctx context.Context, req models.CreateSplitJobRequest, userID *string) (string, error) {
-	s.log.Info("SplitService.Create called", logger.String("inputFileID", req.InputFileID))
+// Split splits PDF from reader by ranges
+func (s *splitService) Split(input io.Reader, ranges string) ([]byte, error) {
+	s.log.Info("SplitService.Split called", logger.String("ranges", ranges))
 
-	// 1. Kiruvchi faylni olish
-	file, err := s.stg.File().GetByID(ctx, req.InputFileID)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("Input file not found", logger.String("fileID", req.InputFileID), logger.Error(err))
-		return "", err
+		return nil, err
 	}
 
-	// Fayl mavjudligini tekshirish
-	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-		s.log.Error("Input file does not exist", logger.String("filePath", file.FilePath))
-		return "", fmt.Errorf("input file does not exist: %s", file.FilePath)
-	}
+	return s.SplitBytes(inputBytes, ranges)
+}
 
-	// 2. Job yaratish
-	job := &models.SplitJob{
-		ID:            uuid.NewString(),
-		UserID:        userID,
-		InputFileID:   req.InputFileID,
-		SplitRanges:   req.SplitRanges,
-		OutputFileIDs: []string{},
-		Status:        "pending",
-		CreatedAt:     time.Now(),
-	}
+// SplitFile splits PDF file by page ranges
+func (s *splitService) SplitFile(inputPath, outputDir string, ranges string) ([]string, error) {
+	s.log.Info("SplitService.SplitFile called", logger.String("input", inputPath))
 
-	if err := s.stg.Split().Create(ctx, job); err != nil {
-		s.log.Error("Failed to create split job", logger.Error(err))
-		return "", err
-	}
-
-	// 3. Output papkasini tayyorlash
-	outputDir := filepath.Join("storage", "split", job.ID)
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		s.log.Error("Failed to create output dir", logger.Error(err))
-		return "", err
+		return nil, err
 	}
 
-	// 4. PDF ni bo'lish (pdfcpu)
-	// SplitRanges formati: "1-3,4-5,6" -> [1-3], [4-5], [6]
-	ranges := strings.Split(req.SplitRanges, ",")
-	var outputFileIDs []string
+	// Parse ranges: "1-3,4-5,6" -> ["1-3", "4-5", "6"]
+	rangeList := strings.Split(ranges, ",")
+	var outputFiles []string
 
-	for i, r := range ranges {
+	for i, r := range rangeList {
 		r = strings.TrimSpace(r)
-		// Har bir qism uchun alohida papka ochamiz (file nomini aniq bilish uchun)
-		partDir := filepath.Join(outputDir, fmt.Sprintf("temp_%d", i))
+		partDir := filepath.Join(outputDir, fmt.Sprintf("part_%d", i+1))
 		if err := os.MkdirAll(partDir, os.ModePerm); err != nil {
-			s.log.Error("Failed to create part dir", logger.Error(err))
 			continue
 		}
 
-		// pdfcpu ExtractPages - string formatda sahifalar kerak: "1-3" yoki "5"
-		// Natija partDir ichiga tushadi
-		if err := api.ExtractPagesFile(file.FilePath, partDir, []string{r}, nil); err != nil {
+		// Extract pages using pdfcpu
+		if err := api.ExtractPagesFile(inputPath, partDir, []string{r}, nil); err != nil {
 			s.log.Error("pdfcpu extract failed", logger.String("range", r), logger.Error(err))
 			continue
 		}
 
-		// partDir ichidagi faylni topamiz
+		// Find generated file
 		files, err := os.ReadDir(partDir)
 		if err != nil || len(files) == 0 {
-			s.log.Error("No file generated in part dir", logger.String("range", r))
 			continue
 		}
-		
-		// Birinchi faylni olamiz (odatda bitta bo'ladi)
-		generatedName := files[0].Name()
-		generatedPath := filepath.Join(partDir, generatedName)
-		
-		outputPath := filepath.Join(outputDir, fmt.Sprintf("part_%d_%s", i+1, generatedName))
 
-		// Faylni asosiy output papkaga ko'chirib, nomini chiroyli qilamiz
+		generatedPath := filepath.Join(partDir, files[0].Name())
+		outputPath := filepath.Join(outputDir, fmt.Sprintf("part_%d.pdf", i+1))
+
 		if err := os.Rename(generatedPath, outputPath); err != nil {
-			s.log.Error("Failed to rename/move output file", logger.Error(err))
 			continue
 		}
-		
-		// Temp papkani o'chiramiz
 		os.RemoveAll(partDir)
 
-		// 5. Output faylni saqlash
-		fi, err := os.Stat(outputPath)
-		if err != nil {
-			s.log.Error("Cannot stat output file", logger.Error(err))
-			continue
-		}
-
-		outputID := uuid.NewString()
-		newFile := models.File{
-			ID:         outputID,
-			UserID:     userID,
-			FileName:   fmt.Sprintf("split_%s", generatedName), // Original nomga yaqin saqlaymiz
-			FilePath:   outputPath,
-			FileType:   "application/pdf",
-			FileSize:   fi.Size(),
-			UploadedAt: time.Now(),
-		}
-
-		if _, err := s.stg.File().Save(ctx, newFile); err != nil {
-			s.log.Error("Failed to save output file", logger.Error(err))
-			continue
-		}
-
-		outputFileIDs = append(outputFileIDs, outputID)
+		outputFiles = append(outputFiles, outputPath)
 	}
 
-	// 6. Job ni update qilish
-	job.OutputFileIDs = outputFileIDs
-	job.Status = "done"
-
-	if err := s.stg.Split().Update(ctx, job); err != nil {
-		s.log.Error("Failed to update split job", logger.Error(err))
-		return "", err
-	}
-
-	s.log.Info("Split job completed", logger.String("jobID", job.ID), logger.Int("outputCount", len(outputFileIDs)))
-	return job.ID, nil
+	s.log.Info("PDF split completed", logger.Int("parts", len(outputFiles)))
+	return outputFiles, nil
 }
 
-func (s *splitService) GetByID(ctx context.Context, id string) (*models.SplitJob, error) {
-	job, err := s.stg.Split().GetByID(ctx, id)
+// SplitBytes splits PDF bytes and returns ZIP
+func (s *splitService) SplitBytes(input []byte, ranges string) ([]byte, error) {
+	s.log.Info("SplitService.SplitBytes called")
+
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pdf-split-*")
 	if err != nil {
-		s.log.Error("Failed to get split job", logger.Error(err))
 		return nil, err
 	}
-	return job, nil
+	defer os.RemoveAll(tmpDir)
+
+	// Write input PDF
+	inputPath := filepath.Join(tmpDir, "input.pdf")
+	if err := os.WriteFile(inputPath, input, 0644); err != nil {
+		return nil, err
+	}
+
+	// Split
+	outputDir := filepath.Join(tmpDir, "output")
+	outputFiles, err := s.SplitFile(inputPath, outputDir, ranges)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(outputFiles) == 0 {
+		return nil, fmt.Errorf("no output files generated")
+	}
+
+	// Create ZIP
+	var zipBuffer bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuffer)
+
+	for _, filePath := range outputFiles {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+
+		w, err := zipWriter.Create(filepath.Base(filePath))
+		if err != nil {
+			continue
+		}
+		w.Write(data)
+	}
+	zipWriter.Close()
+
+	return zipBuffer.Bytes(), nil
 }
 
+// SplitToPages splits PDF into individual pages
+func (s *splitService) SplitToPages(input []byte) ([][]byte, error) {
+	s.log.Info("SplitService.SplitToPages called")
+
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pdf-split-pages-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write input PDF
+	inputPath := filepath.Join(tmpDir, "input.pdf")
+	if err := os.WriteFile(inputPath, input, 0644); err != nil {
+		return nil, err
+	}
+
+	// Split by span=1 (one page per file)
+	outputDir := filepath.Join(tmpDir, "output")
+	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+		return nil, err
+	}
+
+	if err := api.SplitFile(inputPath, outputDir, 1, nil); err != nil {
+		s.log.Error("pdfcpu split failed", logger.Error(err))
+		return nil, err
+	}
+
+	// Read all pages
+	files, err := os.ReadDir(outputDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var pages [][]byte
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(outputDir, f.Name()))
+		if err != nil {
+			continue
+		}
+		pages = append(pages, data)
+	}
+
+	s.log.Info("PDF split to pages completed", logger.Int("pages", len(pages)))
+	return pages, nil
+}

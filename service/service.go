@@ -1,123 +1,84 @@
 package service
 
 import (
-	"convertpdfgo/pkg/gotenberg"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/gotenberg"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
-type IServiceManager interface {
-	File() FileService
-	Compress() CompressService
-	JPGToPDF() JPGToPDFService
+// PDFService - main SDK interface for PDF operations
+type PDFService interface {
+	// Conversion
 	WordToPDF() WordToPDFService
 	ExcelToPDF() ExcelToPDFService
 	PowerPointToPDF() PowerPointToPDFService
-	PublicStats() *PublicStatsService
-	BotUser() BotUserService
+	JPGToPDF() JPGToPDFService
+	PDFToJPG() PDFToJPGService
+
+	// Manipulation
+	Compress() CompressService
 	Merge() MergeService
 	Split() SplitService
 	Rotate() RotateService
 	Watermark() WatermarkService
-	Unlock() UnlockService
-	PDFToJPG() PDFToJPGService
+
+	// Security
 	Protect() ProtectService
+	Unlock() UnlockService
 }
 
-type serviceManager struct {
-	file            FileService
-	compress        CompressService
+type pdfService struct {
 	wordToPDF       WordToPDFService
 	excelToPDF      ExcelToPDFService
 	powerPointToPDF PowerPointToPDFService
 	jpgToPDF        JPGToPDFService
-	publicStats     *PublicStatsService
-	botUser         BotUserService
+	pdfToJPG        PDFToJPGService
+	compress        CompressService
 	merge           MergeService
 	split           SplitService
 	rotate          RotateService
 	watermark       WatermarkService
-	unlock          UnlockService
-	pdfToJPG        PDFToJPGService
 	protect         ProtectService
+	unlock          UnlockService
+	log             logger.ILogger
+	gotClient       gotenberg.Client
 }
 
-func New(stg storage.IStorage, log logger.ILogger, gotClient gotenberg.Client) IServiceManager {
-	return &serviceManager{
-		file:            NewFileService(stg, log),
-		compress:        NewCompressService(stg, log),
-		wordToPDF:       NewWordToPDFService(stg, log, gotClient),
-		excelToPDF:      NewExcelToPDFService(stg, log, gotClient),
-		powerPointToPDF: NewPowerPointToPDFService(stg, log, gotClient),
-		jpgToPDF:        NewJPGToPDFService(stg, log),
-		publicStats:     NewPublicStatsService(stg, log),
-		botUser:         NewBotUserService(stg, log),
-		merge:           NewMergeService(stg, log),
-		split:           NewSplitService(stg, log),
-		rotate:          NewRotateService(stg, log),
-		watermark:       NewWatermarkService(stg, log),
-		unlock:          NewUnlockService(stg, log),
-		pdfToJPG:        NewPDFToJPGService(stg, log),
-		protect:         NewProtectService(stg, log),
+// New creates a new PDF Service instance
+func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
+	return &pdfService{
+		wordToPDF:       NewWordToPDFService(log, gotClient),
+		excelToPDF:      NewExcelToPDFService(log, gotClient),
+		powerPointToPDF: NewPowerPointToPDFService(log, gotClient),
+		jpgToPDF:        NewJPGToPDFService(log),
+		pdfToJPG:        NewPDFToJPGService(log),
+		compress:        NewCompressService(log),
+		merge:           NewMergeService(log),
+		split:           NewSplitService(log),
+		rotate:          NewRotateService(log),
+		watermark:       NewWatermarkService(log),
+		protect:         NewProtectService(log),
+		unlock:          NewUnlockService(log),
+		log:             log,
+		gotClient:       gotClient,
 	}
 }
 
-func (s *serviceManager) File() FileService {
-	return s.file
+// NewWithGotenberg creates PDF service with Gotenberg URL
+func NewWithGotenberg(gotenbergURL string) PDFService {
+	log := logger.New("golang-pdf-sdk")
+	gotClient := gotenberg.New(gotenbergURL)
+	return New(log, gotClient)
 }
 
-func (s *serviceManager) Compress() CompressService {
-	return s.compress
-}
-
-func (s *serviceManager) JPGToPDF() JPGToPDFService {
-	return s.jpgToPDF
-}
-
-func (s *serviceManager) WordToPDF() WordToPDFService {
-	return s.wordToPDF
-}
-
-func (s *serviceManager) ExcelToPDF() ExcelToPDFService {
-	return s.excelToPDF
-}
-
-func (s *serviceManager) PowerPointToPDF() PowerPointToPDFService {
-	return s.powerPointToPDF
-}
-
-func (s *serviceManager) PublicStats() *PublicStatsService {
-	return s.publicStats
-}
-
-func (s *serviceManager) BotUser() BotUserService {
-	return s.botUser
-}
-
-func (s *serviceManager) Merge() MergeService {
-	return s.merge
-}
-
-func (s *serviceManager) Split() SplitService {
-	return s.split
-}
-
-func (s *serviceManager) Rotate() RotateService {
-	return s.rotate
-}
-
-func (s *serviceManager) Watermark() WatermarkService {
-	return s.watermark
-}
-
-func (s *serviceManager) Unlock() UnlockService {
-	return s.unlock
-}
-
-func (s *serviceManager) PDFToJPG() PDFToJPGService {
-	return s.pdfToJPG
-}
-
-func (s *serviceManager) Protect() ProtectService {
-	return s.protect
-}
+func (s *pdfService) WordToPDF() WordToPDFService             { return s.wordToPDF }
+func (s *pdfService) ExcelToPDF() ExcelToPDFService           { return s.excelToPDF }
+func (s *pdfService) PowerPointToPDF() PowerPointToPDFService { return s.powerPointToPDF }
+func (s *pdfService) JPGToPDF() JPGToPDFService               { return s.jpgToPDF }
+func (s *pdfService) PDFToJPG() PDFToJPGService               { return s.pdfToJPG }
+func (s *pdfService) Compress() CompressService               { return s.compress }
+func (s *pdfService) Merge() MergeService                     { return s.merge }
+func (s *pdfService) Split() SplitService                     { return s.split }
+func (s *pdfService) Rotate() RotateService                   { return s.rotate }
+func (s *pdfService) Watermark() WatermarkService             { return s.watermark }
+func (s *pdfService) Protect() ProtectService                 { return s.protect }
+func (s *pdfService) Unlock() UnlockService                   { return s.unlock }

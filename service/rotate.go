@@ -1,153 +1,119 @@
 package service
 
 import (
-	"context"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// RotateService rotates PDF pages
 type RotateService interface {
-	Create(ctx context.Context, req models.RotateRequest, userID *string) (string, error)
-	GetByID(ctx context.Context, id string) (*models.RotateJob, error)
+	// Rotate rotates PDF pages and returns result bytes
+	Rotate(input io.Reader, angle int, pages string) ([]byte, error)
+	// RotateFile rotates PDF file pages
+	RotateFile(inputPath, outputPath string, angle int, pages string) error
+	// RotateBytes rotates PDF bytes
+	RotateBytes(input []byte, angle int, pages string) ([]byte, error)
 }
 
 type rotateService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewRotateService(stg storage.IStorage, log logger.ILogger) RotateService {
+// NewRotateService creates a new rotate service
+func NewRotateService(log logger.ILogger) RotateService {
 	return &rotateService{
-		stg: stg,
 		log: log,
 	}
 }
 
-func (s *rotateService) Create(ctx context.Context, req models.RotateRequest, userID *string) (string, error) {
-	s.log.Info("RotateService.Create called", logger.Int("angle", req.Angle))
+// Rotate rotates PDF from reader
+func (s *rotateService) Rotate(input io.Reader, angle int, pages string) ([]byte, error) {
+	s.log.Info("RotateService.Rotate called", logger.Int("angle", angle))
 
-	// 1. Kiruvchi faylni olish
-	file, err := s.stg.File().GetByID(ctx, req.InputFileID)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("Input file not found", logger.String("fileID", req.InputFileID), logger.Error(err))
-		return "", err
+		return nil, err
 	}
 
-	// Fayl mavjudligini tekshirish
-	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-		s.log.Error("Input file does not exist", logger.String("filePath", file.FilePath))
-		return "", fmt.Errorf("input file does not exist: %s", file.FilePath)
+	return s.RotateBytes(inputBytes, angle, pages)
+}
+
+// RotateFile rotates PDF file
+func (s *rotateService) RotateFile(inputPath, outputPath string, angle int, pages string) error {
+	s.log.Info("RotateService.RotateFile called", logger.String("input", inputPath), logger.Int("angle", angle))
+
+	// Validate angle
+	if angle != 90 && angle != 180 && angle != 270 {
+		return fmt.Errorf("invalid angle: %d (must be 90, 180 or 270)", angle)
 	}
 
-	// Pages default qiymat
-	pages := req.Pages
-	if pages == "" {
-		pages = "all"
-	}
-
-	// Angleni tekshirish (90, 180, 270)
-	if req.Angle != 90 && req.Angle != 180 && req.Angle != 270 {
-		return "", fmt.Errorf("invalid angle: %d (must be 90, 180 or 270)", req.Angle)
-	}
-
-	// 2. Job yaratish
-	job := &models.RotateJob{
-		ID:          uuid.NewString(),
-		UserID:      userID,
-		InputFileID: req.InputFileID,
-		Angle:       req.Angle,
-		Pages:       pages,
-		Status:      "pending",
-		CreatedAt:   time.Now(),
-	}
-
-	if err := s.stg.Rotate().Create(ctx, job); err != nil {
-		s.log.Error("Failed to create rotate job", logger.Error(err))
-		return "", err
-	}
-
-	// 3. Output fayl yo'lini tayyorlash
-	outputID := uuid.NewString()
-	outputDir := "storage/rotate"
-	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		s.log.Error("Failed to create output dir", logger.Error(err))
-		return "", err
-	}
-	outputPath := filepath.Join(outputDir, outputID+".pdf")
-
-	// 4. Faylni nusxalash (original faylni o'zgartirmaslik uchun)
-	inputBytes, err := os.ReadFile(file.FilePath)
+	// Copy input to output first
+	inputBytes, err := os.ReadFile(inputPath)
 	if err != nil {
-		s.log.Error("Failed to read input file", logger.Error(err))
-		return "", err
+		return err
 	}
 	if err := os.WriteFile(outputPath, inputBytes, 0644); err != nil {
-		s.log.Error("Failed to write temp file", logger.Error(err))
-		return "", err
+		return err
 	}
 
-	// 5. pdfcpu bilan aylantirish
-	// pdfcpu Rotate: angle va pages
+	// Prepare pages selection
 	var selectedPages []string
-	if pages != "all" {
+	if pages != "" && pages != "all" {
 		selectedPages = []string{pages}
 	}
 
-	if err := api.RotateFile(outputPath, "", req.Angle, selectedPages, nil); err != nil {
+	// Rotate in place
+	if err := api.RotateFile(outputPath, "", angle, selectedPages, nil); err != nil {
 		s.log.Error("pdfcpu rotate failed", logger.Error(err))
 		os.Remove(outputPath)
-		return "", fmt.Errorf("rotate failed: %w", err)
+		return fmt.Errorf("rotate failed: %w", err)
 	}
 
-	// 6. Natijaviy faylni sistemaga saqlash
-	fi, err := os.Stat(outputPath)
-	if err != nil {
-		s.log.Error("Cannot stat output file", logger.Error(err))
-		return "", err
-	}
-
-	newFile := models.File{
-		ID:         outputID,
-		UserID:     userID,
-		FileName:   fmt.Sprintf("rotated_%d_%s", req.Angle, filepath.Base(file.FileName)),
-		FilePath:   outputPath,
-		FileType:   "application/pdf",
-		FileSize:   fi.Size(),
-		UploadedAt: time.Now(),
-	}
-
-	if _, err := s.stg.File().Save(ctx, newFile); err != nil {
-		s.log.Error("Failed to save output file", logger.Error(err))
-		return "", err
-	}
-
-	// 7. Jobni update qilish
-	job.OutputFileID = &outputID
-	job.Status = "done"
-
-	if err := s.stg.Rotate().Update(ctx, job); err != nil {
-		s.log.Error("Failed to update rotate job", logger.Error(err))
-		return "", err
-	}
-
-	s.log.Info("Rotate job completed", logger.String("jobID", job.ID), logger.Int("angle", req.Angle))
-	return job.ID, nil
+	s.log.Info("PDF rotation completed", logger.String("output", outputPath))
+	return nil
 }
 
-func (s *rotateService) GetByID(ctx context.Context, id string) (*models.RotateJob, error) {
-	job, err := s.stg.Rotate().GetByID(ctx, id)
+// RotateBytes rotates PDF bytes
+func (s *rotateService) RotateBytes(input []byte, angle int, pages string) ([]byte, error) {
+	s.log.Info("RotateService.RotateBytes called", logger.Int("angle", angle))
+
+	// Create temp files
+	tmpInput, err := os.CreateTemp("", "pdf-rotate-*.pdf")
 	if err != nil {
-		s.log.Error("Failed to get rotate job", logger.Error(err))
 		return nil, err
 	}
-	return job, nil
+	defer os.Remove(tmpInput.Name())
+
+	tmpOutput, err := os.CreateTemp("", "pdf-rotate-out-*.pdf")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmpOutput.Name())
+	tmpOutput.Close()
+
+	// Write input
+	if _, err := tmpInput.Write(input); err != nil {
+		tmpInput.Close()
+		return nil, err
+	}
+	tmpInput.Close()
+
+	// Rotate
+	if err := s.RotateFile(tmpInput.Name(), tmpOutput.Name(), angle, pages); err != nil {
+		return nil, err
+	}
+
+	// Read output
+	output, err := os.ReadFile(tmpOutput.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("PDF rotation completed", logger.Int("outputSize", len(output)))
+	return output, nil
 }

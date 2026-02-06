@@ -1,102 +1,107 @@
 package service
 
 import (
-	"context"
-	"fmt"
+	"bytes"
+	"io"
 	"os"
-	"path/filepath"
 
-	"github.com/google/uuid"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// MergeService merges multiple PDF files into one
 type MergeService interface {
-	Create(ctx context.Context, job models.MergeJob) (string, error)
-	Get(ctx context.Context, id string) (*models.MergeJob, error)
-	MergeFiles(ctx context.Context, jobID string) (*models.File, error)
+	// Merge merges multiple PDF readers into single PDF bytes
+	Merge(inputs []io.Reader) ([]byte, error)
+	// MergeFiles merges multiple PDF files into one
+	MergeFiles(inputPaths []string, outputPath string) error
+	// MergeBytes merges multiple PDF byte slices into one
+	MergeBytes(inputs [][]byte) ([]byte, error)
 }
 
 type mergeService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewMergeService(stg storage.IStorage, log logger.ILogger) MergeService {
-	return &mergeService{stg: stg, log: log}
+// NewMergeService creates a new merge service
+func NewMergeService(log logger.ILogger) MergeService {
+	return &mergeService{log: log}
 }
 
-func (s *mergeService) Create(ctx context.Context, job models.MergeJob) (string, error) {
-	return s.stg.Merge().Create(ctx, job)
-}
+// Merge merges multiple PDF readers into single PDF bytes
+func (s *mergeService) Merge(inputs []io.Reader) ([]byte, error) {
+	s.log.Info("MergeService.Merge called", logger.Int("inputCount", len(inputs)))
 
-func (s *mergeService) Get(ctx context.Context, id string) (*models.MergeJob, error) {
-	return s.stg.Merge().Get(ctx, id)
-}
-
-func (s *mergeService) MergeFiles(ctx context.Context, jobID string) (*models.File, error) {
-	job, err := s.stg.Merge().Get(ctx, jobID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 1. Fayllarni yig'ish
-	var inputPaths []string
-	for _, fileID := range job.InputFileIDs {
-		file, err := s.stg.File().GetByID(ctx, fileID)
+	var inputBytes [][]byte
+	for _, r := range inputs {
+		data, err := io.ReadAll(r)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get file %s: %w", fileID, err)
+			return nil, err
 		}
-		inputPaths = append(inputPaths, file.FilePath)
+		inputBytes = append(inputBytes, data)
 	}
 
-	// 2. Output path yaratish
-	outputDir := filepath.Join("storage", "merged_files")
-	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		return nil, err
-	}
-	outputFileName := uuid.NewString() + "_merged.pdf"
-	outputFilePath := filepath.Join(outputDir, outputFileName)
+	return s.MergeBytes(inputBytes)
+}
 
-	// 3. pdfcpu orqali birlashtirish
+// MergeFiles merges multiple PDF files into one output file
+func (s *mergeService) MergeFiles(inputPaths []string, outputPath string) error {
+	s.log.Info("MergeService.MergeFiles called", logger.Int("inputCount", len(inputPaths)))
+
 	conf := model.NewDefaultConfiguration()
-	// conf.ValidationMode = model.ValidationNone // Removed to avoid dependency issues
 
-	if err := api.MergeCreateFile(inputPaths, outputFilePath, false, conf); err != nil {
+	if err := api.MergeCreateFile(inputPaths, outputPath, false, conf); err != nil {
 		s.log.Error("pdfcpu merge failed", logger.Error(err))
-		return nil, err
+		return err
 	}
 
-	// 4. Output faylni DB ga saqlash
-	outputFile := models.File{
-		ID:       uuid.NewString(),
-		FileName: "merged.pdf",
-		FilePath: outputFilePath,
-		FileType: "application/pdf",
-		FileSize: 0,
-	}
+	s.log.Info("PDF merge completed", logger.String("output", outputPath))
+	return nil
+}
 
-	fileInfo, err := os.Stat(outputFilePath)
-	if err == nil {
-		outputFile.FileSize = fileInfo.Size()
-	}
+// MergeBytes merges multiple PDF byte slices into one
+func (s *mergeService) MergeBytes(inputs [][]byte) ([]byte, error) {
+	s.log.Info("MergeService.MergeBytes called", logger.Int("inputCount", len(inputs)))
 
-	fileID, err := s.stg.File().Save(ctx, outputFile)
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pdf-merge-*")
 	if err != nil {
 		return nil, err
 	}
-	outputFile.ID = fileID
+	defer os.RemoveAll(tmpDir)
 
-	// 5. Job ni update qilish
-	job.OutputFileID = &fileID
-	job.Status = "completed"
-	if err := s.stg.Merge().Update(ctx, *job); err != nil {
+	// Write inputs to temp files
+	var inputPaths []string
+	for i, data := range inputs {
+		tmpPath := tmpDir + "/" + string(rune('a'+i)) + ".pdf"
+		if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+			return nil, err
+		}
+		inputPaths = append(inputPaths, tmpPath)
+	}
+
+	// Merge to output file
+	outputPath := tmpDir + "/merged.pdf"
+	if err := s.MergeFiles(inputPaths, outputPath); err != nil {
 		return nil, err
 	}
 
-	return &outputFile, nil
+	// Read output
+	output, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("PDF merge completed", logger.Int("outputSize", len(output)))
+	return output, nil
+}
+
+// Utility for creating temp filename
+func tempPDFName(prefix string, index int) string {
+	buf := bytes.NewBufferString(prefix)
+	buf.WriteByte(byte('0' + index%10))
+	buf.WriteString(".pdf")
+	return buf.String()
 }

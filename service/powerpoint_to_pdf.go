@@ -2,99 +2,96 @@ package service
 
 import (
 	"context"
+	"io"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/google/uuid"
-
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/gotenberg"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/gotenberg"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// PowerPointToPDFService converts PowerPoint presentations to PDF
 type PowerPointToPDFService interface {
-	Create(ctx context.Context, req models.PowerPointToPDFRequest, userID *string) (string, error)
-	GetByID(ctx context.Context, id string) (*models.PowerPointToPDFJob, error)
+	// Convert converts PowerPoint to PDF bytes
+	Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error)
+	// ConvertFile converts PowerPoint file to PDF file
+	ConvertFile(ctx context.Context, inputPath, outputPath string) error
+	// ConvertBytes converts PowerPoint bytes to PDF bytes
+	ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error)
 }
 
 type powerPointToPDFService struct {
-	stg       storage.IStorage
 	log       logger.ILogger
 	gotClient gotenberg.Client
 }
 
-func NewPowerPointToPDFService(stg storage.IStorage, log logger.ILogger, gotClient gotenberg.Client) PowerPointToPDFService {
+// NewPowerPointToPDFService creates a new PowerPoint to PDF service
+func NewPowerPointToPDFService(log logger.ILogger, gotClient gotenberg.Client) PowerPointToPDFService {
 	return &powerPointToPDFService{
-		stg:       stg,
 		log:       log,
 		gotClient: gotClient,
 	}
 }
 
-func (s *powerPointToPDFService) Create(ctx context.Context, req models.PowerPointToPDFRequest, userID *string) (string, error) {
-	s.log.Info("PowerPointToPDFService.Create called")
+// Convert converts PowerPoint from reader to PDF bytes
+func (s *powerPointToPDFService) Convert(ctx context.Context, input io.Reader, filename string) ([]byte, error) {
+	s.log.Info("PowerPointToPDFService.Convert called", logger.String("filename", filename))
 
-	file, err := s.stg.File().GetByID(ctx, req.InputFileID)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("input file not found", logger.Error(err))
-		return "", err
-	}
-
-	resultBytes, err := s.gotClient.PowerPointToPDF(ctx, file.FilePath)
-	if err != nil {
-		s.log.Error("Gotenberg conversion failed", logger.Error(err))
-		return "", err
-	}
-
-	jobID := uuid.NewString()
-	outputFileID := uuid.NewString()
-	outputPath := filepath.Join("storage/powerpoint_to_pdf", outputFileID+".pdf")
-
-	if err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(outputPath, resultBytes, 0644); err != nil {
-		return "", err
-	}
-
-	fi, _ := os.Stat(outputPath)
-	newFile := models.File{
-		ID:         outputFileID,
-		UserID:     userID,
-		FileName:   filepath.Base(outputPath),
-		FilePath:   outputPath,
-		FileType:   "application/pdf",
-		FileSize:   fi.Size(),
-		UploadedAt: time.Now(),
-	}
-	if _, err := s.stg.File().Save(ctx, newFile); err != nil {
-		s.log.Error("failed to save output file", logger.Error(err))
-		return "", err
-	}
-
-	job := &models.PowerPointToPDFJob{
-		ID:           jobID,
-		UserID:       userID,
-		InputFileID:  req.InputFileID,
-		OutputFileID: &outputFileID,
-		Status:       "done",
-		CreatedAt:    time.Now(),
-	}
-	if err := s.stg.PowerPointToPDF().Create(ctx, job); err != nil {
-		s.log.Error("failed to save job", logger.Error(err))
-		return "", err
-	}
-
-	return jobID, nil
-}
-
-func (s *powerPointToPDFService) GetByID(ctx context.Context, id string) (*models.PowerPointToPDFJob, error) {
-	job, err := s.stg.PowerPointToPDF().GetByID(ctx, id)
-	if err != nil {
-		s.log.Error("PowerPointToPDF job not found", logger.Error(err))
+		s.log.Error("Failed to read input", logger.Error(err))
 		return nil, err
 	}
-	return job, nil
+
+	return s.ConvertBytes(ctx, inputBytes, filename)
+}
+
+// ConvertFile converts PowerPoint file to PDF file
+func (s *powerPointToPDFService) ConvertFile(ctx context.Context, inputPath, outputPath string) error {
+	s.log.Info("PowerPointToPDFService.ConvertFile called", logger.String("input", inputPath))
+
+	resultBytes, err := s.gotClient.PowerPointToPDF(ctx, inputPath)
+	if err != nil {
+		s.log.Error("Gotenberg conversion failed", logger.Error(err))
+		return err
+	}
+
+	if err := os.WriteFile(outputPath, resultBytes, 0644); err != nil {
+		s.log.Error("Failed to write output file", logger.Error(err))
+		return err
+	}
+
+	s.log.Info("PowerPoint to PDF conversion completed", logger.String("output", outputPath))
+	return nil
+}
+
+// ConvertBytes converts PowerPoint bytes to PDF bytes
+func (s *powerPointToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
+	s.log.Info("PowerPointToPDFService.ConvertBytes called")
+
+	// Create temp file for input
+	ext := ".pptx"
+	if len(filename) > 4 {
+		ext = filename[len(filename)-5:]
+	}
+	tmpInput, err := os.CreateTemp("", "ppt-input-*"+ext)
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmpInput.Name())
+
+	if _, err := tmpInput.Write(input); err != nil {
+		tmpInput.Close()
+		return nil, err
+	}
+	tmpInput.Close()
+
+	// Convert using Gotenberg
+	resultBytes, err := s.gotClient.PowerPointToPDF(ctx, tmpInput.Name())
+	if err != nil {
+		s.log.Error("Gotenberg conversion failed", logger.Error(err))
+		return nil, err
+	}
+
+	s.log.Info("PowerPoint to PDF conversion completed", logger.Int("outputSize", len(resultBytes)))
+	return resultBytes, nil
 }

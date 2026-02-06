@@ -1,36 +1,125 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"convertpdfgo/api"
-	"convertpdfgo/config"
-	"convertpdfgo/pkg/gotenberg"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/service"
+	"github.com/infosec554/golang-pdf-sdk/service"
 )
 
 func main() {
-	cfg := config.Load()
-	log := logger.New(cfg.ServiceName)
+	// Create PDF service with Gotenberg URL
+	pdfService := service.NewWithGotenberg("http://localhost:3000")
 
-	gotClient := gotenberg.New(cfg.GotenbergURL)
-	services := service.New(nil, log, gotClient)
+	// Example: Compress a PDF
+	exampleCompress(pdfService)
 
-	// HTTP Server
-	server := api.New(cfg, log, services)
-	go func() {
-		if err := server.Run(); err != nil {
-			log.Error("failed to start http server", logger.Error(err))
-		}
-	}()
-	log.Info("HTTP server started", logger.String("port", cfg.AppPort))
+	// Example: Rotate a PDF
+	exampleRotate(pdfService)
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// Example: Split a PDF
+	exampleSplit(pdfService)
 
-	log.Info("Shutting down...")
+	fmt.Println("All examples completed!")
+}
+
+func exampleCompress(pdf service.PDFService) {
+	fmt.Println("=== PDF Compression Example ===")
+
+	// Read input PDF
+	inputBytes, err := os.ReadFile("input.pdf")
+	if err != nil {
+		fmt.Println("No input.pdf found, skipping compression example")
+		return
+	}
+
+	// Compress
+	outputBytes, err := pdf.Compress().CompressBytes(inputBytes)
+	if err != nil {
+		fmt.Println("Compression failed:", err)
+		return
+	}
+
+	// Save output
+	if err := os.WriteFile("compressed.pdf", outputBytes, 0644); err != nil {
+		fmt.Println("Failed to save:", err)
+		return
+	}
+
+	fmt.Printf("Compressed: %d -> %d bytes (%.1f%% reduction)\n",
+		len(inputBytes), len(outputBytes),
+		(1-float64(len(outputBytes))/float64(len(inputBytes)))*100)
+}
+
+func exampleRotate(pdf service.PDFService) {
+	fmt.Println("\n=== PDF Rotation Example ===")
+
+	inputBytes, err := os.ReadFile("input.pdf")
+	if err != nil {
+		fmt.Println("No input.pdf found, skipping rotation example")
+		return
+	}
+
+	// Rotate 90 degrees
+	outputBytes, err := pdf.Rotate().RotateBytes(inputBytes, 90, "all")
+	if err != nil {
+		fmt.Println("Rotation failed:", err)
+		return
+	}
+
+	if err := os.WriteFile("rotated.pdf", outputBytes, 0644); err != nil {
+		fmt.Println("Failed to save:", err)
+		return
+	}
+
+	fmt.Println("Rotated PDF saved as rotated.pdf")
+}
+
+func exampleSplit(pdf service.PDFService) {
+	fmt.Println("\n=== PDF Split Example ===")
+
+	inputBytes, err := os.ReadFile("input.pdf")
+	if err != nil {
+		fmt.Println("No input.pdf found, skipping split example")
+		return
+	}
+
+	// Split first 2 pages
+	zipBytes, err := pdf.Split().SplitBytes(inputBytes, "1-2")
+	if err != nil {
+		fmt.Println("Split failed:", err)
+		return
+	}
+
+	if err := os.WriteFile("split_pages.zip", zipBytes, 0644); err != nil {
+		fmt.Println("Failed to save:", err)
+		return
+	}
+
+	fmt.Println("Split pages saved as split_pages.zip")
+}
+
+func exampleWordToPDF(pdf service.PDFService) {
+	fmt.Println("\n=== Word to PDF Example ===")
+
+	inputBytes, err := os.ReadFile("document.docx")
+	if err != nil {
+		fmt.Println("No document.docx found, skipping")
+		return
+	}
+
+	ctx := context.Background()
+	outputBytes, err := pdf.WordToPDF().ConvertBytes(ctx, inputBytes, "document.docx")
+	if err != nil {
+		fmt.Println("Conversion failed:", err)
+		return
+	}
+
+	if err := os.WriteFile("document.pdf", outputBytes, 0644); err != nil {
+		fmt.Println("Failed to save:", err)
+		return
+	}
+
+	fmt.Println("Converted to document.pdf")
 }

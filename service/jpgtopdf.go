@@ -1,141 +1,163 @@
 package service
 
 import (
-	"context"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"time"
+	"sort"
 
-	"github.com/google/uuid"
 	"github.com/jung-kurt/gofpdf"
 
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// JPGToPDFService converts JPG/PNG images to PDF
 type JPGToPDFService interface {
-	CreateJob(ctx context.Context, userID *string, inputFileIDs []string) (string, error)
-	GetJobByID(ctx context.Context, id string) (*models.JPGToPDFJob, error)
+	// Convert converts single image to PDF bytes
+	Convert(input io.Reader, filename string) ([]byte, error)
+	// ConvertMultiple converts multiple images to single PDF
+	ConvertMultiple(inputs []io.Reader, filenames []string) ([]byte, error)
+	// ConvertFiles converts image files to PDF file
+	ConvertFiles(inputPaths []string, outputPath string) error
+	// ConvertBytes converts image bytes to PDF bytes
+	ConvertBytes(input []byte, filename string) ([]byte, error)
+	// ConvertMultipleBytes converts multiple image bytes to PDF
+	ConvertMultipleBytes(inputs [][]byte, filenames []string) ([]byte, error)
 }
 
 type jpgToPDFService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewJPGToPDFService(stg storage.IStorage, log logger.ILogger) JPGToPDFService {
+// NewJPGToPDFService creates a new JPG to PDF service
+func NewJPGToPDFService(log logger.ILogger) JPGToPDFService {
 	return &jpgToPDFService{
-		stg: stg,
 		log: log,
 	}
 }
 
-func (s *jpgToPDFService) CreateJob(ctx context.Context, userID *string, inputFileIDs []string) (string, error) {
-	s.log.Info("JPGToPDFService.CreateJob called")
+// Convert converts single image to PDF
+func (s *jpgToPDFService) Convert(input io.Reader, filename string) ([]byte, error) {
+	s.log.Info("JPGToPDFService.Convert called", logger.String("filename", filename))
 
-	if len(inputFileIDs) == 0 {
-		return "", fmt.Errorf("no input files provided")
-	}
-
-	var inputPaths []string
-	// Retrieve all file paths corresponding to input file IDs
-	for _, fileID := range inputFileIDs {
-		file, err := s.stg.File().GetByID(ctx, fileID)
-		if err != nil {
-			s.log.Error("file not found", logger.String("fileID", fileID), logger.Error(err))
-			return "", fmt.Errorf("file not found: %s", fileID)
-		}
-		// Check if the file path exists before proceeding
-		if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-			s.log.Error("Input file does not exist", logger.String("filePath", file.FilePath))
-			return "", fmt.Errorf("input file does not exist: %s", file.FilePath)
-		}
-		inputPaths = append(inputPaths, file.FilePath)
-	}
-
-	// Generate a new job ID
-	jobID := uuid.New().String()
-	job := &models.JPGToPDFJob{
-		ID:           jobID,
-		UserID:       userID, // Pass nil for guest users
-		InputFileIDs: inputFileIDs,
-		Status:       "pending",
-		CreatedAt:    time.Now(),
-	}
-
-	// Create a job entry in DB
-	if err := s.stg.JPGToPDF().Create(ctx, job); err != nil {
-		s.log.Error("failed to create job entry in DB", logger.Error(err))
-		return "", err
-	}
-
-	// Prepare output directory for PDF
-	outputID := uuid.New().String()
-	outputDir := filepath.Join("storage", "jpg_to_pdf")
-	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		s.log.Error("failed to create output directory", logger.Error(err))
-		return "", err
-	}
-
-	outputPath := filepath.Join(outputDir, outputID+".pdf")
-
-	// Create a PDF from the JPG images
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	for _, imgPath := range inputPaths {
-		pdf.AddPage()
-		// Ensure that each image is added to the PDF correctly
-		pdf.ImageOptions(imgPath, 10, 10, 190, 0, false, gofpdf.ImageOptions{ImageType: "JPG", ReadDpi: true}, 0, "")
-	}
-
-	// Output the generated PDF to a file
-	err := pdf.OutputFileAndClose(outputPath)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("failed to generate PDF", logger.Error(err))
-		return "", fmt.Errorf("failed to generate PDF: %w", err)
-	}
-
-	// Save output PDF file metadata
-	fi, err := os.Stat(outputPath)
-	if err != nil {
-		s.log.Error("cannot stat output PDF", logger.Error(err))
-		return "", err
-	}
-
-	newFile := models.File{
-		ID:         outputID,
-		UserID:     userID, // Pass nil for guest users
-		FileName:   filepath.Base(outputPath),
-		FilePath:   outputPath,
-		FileType:   "application/pdf",
-		FileSize:   fi.Size(),
-		UploadedAt: time.Now(),
-	}
-
-	// Save the file information to the storage
-	if _, err := s.stg.File().Save(ctx, newFile); err != nil {
-		s.log.Error("failed to save output file", logger.Error(err))
-		return "", err
-	}
-
-	// Update job status and output file ID in DB
-	job.OutputFileID = &outputID
-	job.Status = "done"
-	if err := s.stg.JPGToPDF().UpdateStatusAndOutput(ctx, job.ID, job.Status, *job.OutputFileID); err != nil {
-		s.log.Error("failed to update job status in DB", logger.Error(err))
-		return "", err
-	}
-
-	s.log.Info("JPG to PDF conversion job completed", logger.String("jobID", jobID))
-	return jobID, nil
-}
-
-func (s *jpgToPDFService) GetJobByID(ctx context.Context, id string) (*models.JPGToPDFJob, error) {
-	job, err := s.stg.JPGToPDF().GetByID(ctx, id)
-	if err != nil {
-		s.log.Error("failed to get job by ID", logger.Error(err))
 		return nil, err
 	}
-	return job, nil
+
+	return s.ConvertBytes(inputBytes, filename)
+}
+
+// ConvertMultiple converts multiple images to single PDF
+func (s *jpgToPDFService) ConvertMultiple(inputs []io.Reader, filenames []string) ([]byte, error) {
+	s.log.Info("JPGToPDFService.ConvertMultiple called", logger.Int("count", len(inputs)))
+
+	var inputBytes [][]byte
+	for _, r := range inputs {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		inputBytes = append(inputBytes, data)
+	}
+
+	return s.ConvertMultipleBytes(inputBytes, filenames)
+}
+
+// ConvertFiles converts image files to PDF
+func (s *jpgToPDFService) ConvertFiles(inputPaths []string, outputPath string) error {
+	s.log.Info("JPGToPDFService.ConvertFiles called", logger.Int("count", len(inputPaths)))
+
+	// Sort files for consistent ordering
+	sort.Strings(inputPaths)
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+
+	for _, imgPath := range inputPaths {
+		ext := filepath.Ext(imgPath)
+		imgType := "JPG"
+		if ext == ".png" || ext == ".PNG" {
+			imgType = "PNG"
+		}
+
+		// Add new page
+		pdf.AddPage()
+
+		// Get page dimensions
+		pageW, pageH := pdf.GetPageSize()
+
+		// Register and add image
+		pdf.RegisterImageOptions(imgPath, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true})
+
+		// Fit image to page
+		pdf.ImageOptions(imgPath, 0, 0, pageW, pageH, false, gofpdf.ImageOptions{ImageType: imgType}, 0, "")
+	}
+
+	if err := pdf.OutputFileAndClose(outputPath); err != nil {
+		s.log.Error("Failed to create PDF", logger.Error(err))
+		return err
+	}
+
+	s.log.Info("Images to PDF conversion completed", logger.String("output", outputPath))
+	return nil
+}
+
+// ConvertBytes converts single image bytes to PDF bytes
+func (s *jpgToPDFService) ConvertBytes(input []byte, filename string) ([]byte, error) {
+	return s.ConvertMultipleBytes([][]byte{input}, []string{filename})
+}
+
+// ConvertMultipleBytes converts multiple image bytes to PDF bytes
+func (s *jpgToPDFService) ConvertMultipleBytes(inputs [][]byte, filenames []string) ([]byte, error) {
+	s.log.Info("JPGToPDFService.ConvertMultipleBytes called", logger.Int("count", len(inputs)))
+
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "jpg-to-pdf-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write images to temp files
+	var inputPaths []string
+	for i, data := range inputs {
+		filename := fmt.Sprintf("image_%d.jpg", i)
+		if i < len(filenames) {
+			filename = filenames[i]
+		}
+		tmpPath := filepath.Join(tmpDir, filename)
+		if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+			return nil, err
+		}
+		inputPaths = append(inputPaths, tmpPath)
+	}
+
+	// Convert to PDF
+	outputPath := filepath.Join(tmpDir, "output.pdf")
+	if err := s.ConvertFiles(inputPaths, outputPath); err != nil {
+		return nil, err
+	}
+
+	// Read output
+	output, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("Images to PDF conversion completed", logger.Int("outputSize", len(output)))
+	return output, nil
+}
+
+// Helper to detect image type from bytes
+func detectImageType(data []byte) string {
+	if len(data) < 3 {
+		return "JPG"
+	}
+	// PNG signature
+	if bytes.HasPrefix(data, []byte{0x89, 0x50, 0x4E}) {
+		return "PNG"
+	}
+	return "JPG"
 }

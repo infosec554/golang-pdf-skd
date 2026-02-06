@@ -8,28 +8,24 @@ import (
 	"github.com/spf13/cast"
 )
 
+// Config - SDK configuration
 type Config struct {
-	PostgresHost     string
-	PostgresPort     string
-	PostgresUser     string
-	PostgresPassword string
-	PostgresDB       string
-
+	// Service settings
 	ServiceName string
 	LoggerLevel string
 
+	// Gotenberg PDF engine URL
 	GotenbergURL string
 
-	BotToken        string
-	AdminUserID     string
-	RequiredChannel string // @channelname yoki channel ID
-	AppHost         string
-	AppPort         string
+	// HTTP Server settings (optional, for API mode)
+	AppHost string
+	AppPort string
 }
 
+// Load loads configuration from environment variables
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
-		fmt.Println("error loading .env file:", err)
+		fmt.Println("No .env file found, using defaults")
 	}
 
 	cfg := &Config{}
@@ -37,22 +33,23 @@ func Load() *Config {
 	cfg.AppHost = cast.ToString(getOrReturnDefault("APP_HOST", "localhost"))
 	cfg.AppPort = cast.ToString(getOrReturnDefault("APP_PORT", ":8080"))
 
-	cfg.PostgresHost = cast.ToString(getOrReturnDefault("POSTGRES_HOST", "localhost"))
-	cfg.PostgresPort = cast.ToString(getOrReturnDefault("POSTGRES_PORT", "5432"))
-	cfg.PostgresUser = cast.ToString(getOrReturnDefault("POSTGRES_USER", "postgres"))
-	cfg.PostgresPassword = cast.ToString(getOrReturnDefault("POSTGRES_PASSWORD", "1234"))
-	cfg.PostgresDB = cast.ToString(getOrReturnDefault("POSTGRES_DB", "convertpdfgo"))
-
-	cfg.ServiceName = cast.ToString(getOrReturnDefault("SERVICE_NAME", "convertpdfgo"))
+	cfg.ServiceName = cast.ToString(getOrReturnDefault("SERVICE_NAME", "golang-pdf-sdk"))
 	cfg.LoggerLevel = cast.ToString(getOrReturnDefault("LOGGER_LEVEL", "debug"))
 
 	cfg.GotenbergURL = cast.ToString(getOrReturnDefault("GOTENBERG_URL", "http://localhost:3000"))
 
-	cfg.BotToken = cast.ToString(getOrReturnDefault("BOT_TOKEN", "7605533369:AAFzCwG_gJtKpNQBG-iM9-h0PbRd9uqhDYw"))
-	cfg.AdminUserID = cast.ToString(getOrReturnDefault("ADMIN_USER_ID", "7697210313"))
-	cfg.RequiredChannel = cast.ToString(getOrReturnDefault("REQUIRED_CHANNEL", "@convertpdfgo"))
-
 	return cfg
+}
+
+// NewWithURL creates a new config with custom Gotenberg URL
+func NewWithURL(gotenbergURL string) *Config {
+	return &Config{
+		ServiceName:  "golang-pdf-sdk",
+		LoggerLevel:  "info",
+		GotenbergURL: gotenbergURL,
+		AppHost:      "localhost",
+		AppPort:      ":8080",
+	}
 }
 
 func getOrReturnDefault(key string, defaultValue any) any {

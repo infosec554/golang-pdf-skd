@@ -2,128 +2,136 @@ package service
 
 import (
 	"archive/zip"
-	"context"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
-
-	"convertpdfgo/api/models"
-	"convertpdfgo/pkg/logger"
-	"convertpdfgo/storage"
+	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
 )
 
+// PDFToJPGService converts PDF pages to JPG images
 type PDFToJPGService interface {
-	Create(ctx context.Context, req models.PDFToJPGRequest, userID *string) (string, error)
-	GetByID(ctx context.Context, id string) (*models.PDFToJPGJob, error)
+	// Convert converts PDF to JPG images and returns as ZIP bytes
+	Convert(input io.Reader) ([]byte, error)
+	// ConvertFile converts PDF file to JPG images in output directory
+	ConvertFile(inputPath, outputDir string) ([]string, error)
+	// ConvertBytes converts PDF bytes to ZIP containing JPG images
+	ConvertBytes(input []byte) ([]byte, error)
+	// ConvertToImages converts PDF bytes and returns individual image bytes
+	ConvertToImages(input []byte) ([][]byte, error)
 }
 
 type pdfToJPGService struct {
-	stg storage.IStorage
 	log logger.ILogger
 }
 
-func NewPDFToJPGService(stg storage.IStorage, log logger.ILogger) PDFToJPGService {
+// NewPDFToJPGService creates a new PDF to JPG service
+func NewPDFToJPGService(log logger.ILogger) PDFToJPGService {
 	return &pdfToJPGService{
-		stg: stg,
 		log: log,
 	}
 }
 
-func (s *pdfToJPGService) Create(ctx context.Context, req models.PDFToJPGRequest, userID *string) (string, error) {
-	s.log.Info("PDFToJPGService.Create called (Renderer Mode)")
+// Convert converts PDF from reader to ZIP containing JPG images
+func (s *pdfToJPGService) Convert(input io.Reader) ([]byte, error) {
+	s.log.Info("PDFToJPGService.Convert called")
 
-	// 1. Kiruvchi faylni olish
-	file, err := s.stg.File().GetByID(ctx, req.InputFileID)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
-		s.log.Error("Input file not found", logger.String("fileID", req.InputFileID), logger.Error(err))
-		return "", err
+		s.log.Error("Failed to read input", logger.Error(err))
+		return nil, err
 	}
 
-	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
-		s.log.Error("Input file does not exist", logger.String("filePath", file.FilePath))
-		return "", fmt.Errorf("input file does not exist: %s", file.FilePath)
-	}
+	return s.ConvertBytes(inputBytes)
+}
 
-	// 2. Job yaratish
-	jobID := uuid.NewString()
-	job := &models.PDFToJPGJob{
-		ID:          jobID,
-		UserID:      userID,
-		InputFileID: req.InputFileID,
-		Status:      "processing",
-		CreatedAt:   time.Now(),
-	}
+// ConvertFile converts PDF file to JPG images
+func (s *pdfToJPGService) ConvertFile(inputPath, outputDir string) ([]string, error) {
+	s.log.Info("PDFToJPGService.ConvertFile called", logger.String("input", inputPath))
 
-	// 3. Output papkasini tayyorlash
-	outputDir := filepath.Join("storage", "pdf_to_jpg", jobID)
+	// Create output directory
 	if err := os.MkdirAll(outputDir, 0777); err != nil {
 		s.log.Error("Failed to create output dir", logger.Error(err))
-		return "", err
+		return nil, err
 	}
 
-	// 4. pdftoppm yordamida PDF ni JPG ga aylantirish (Renderer)
-	// Usage: pdftoppm -jpeg -r 150 input.pdf output_prefix
+	// Use pdftoppm to convert PDF to JPG
 	prefix := filepath.Join(outputDir, "page")
-	cmd := exec.Command("pdftoppm", "-jpeg", "-r", "150", file.FilePath, prefix)
+	cmd := exec.Command("pdftoppm", "-jpeg", "-r", "150", inputPath, prefix)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		s.log.Error("pdftoppm execution failed", logger.String("output", string(output)), logger.Error(err))
-		return "", fmt.Errorf("image conversion failed: %w", err)
+		return nil, fmt.Errorf("image conversion failed: %w", err)
 	}
 
-	// 5. Chiqarilgan rasmlarni yig'ish
+	// Collect generated images
 	var imageFiles []string
-	err = filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if !info.IsDir() {
 			ext := strings.ToLower(filepath.Ext(path))
-			if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+			if ext == ".jpg" || ext == ".jpeg" {
 				imageFiles = append(imageFiles, path)
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Strings(imageFiles)
+	s.log.Info("PDF to JPG conversion completed", logger.Int("pages", len(imageFiles)))
+
+	return imageFiles, nil
+}
+
+// ConvertBytes converts PDF bytes to ZIP containing JPG images
+func (s *pdfToJPGService) ConvertBytes(input []byte) ([]byte, error) {
+	s.log.Info("PDFToJPGService.ConvertBytes called")
+
+	// Create temp directory for processing
+	tmpDir, err := os.MkdirTemp("", "pdf-to-jpg-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write input PDF to temp file
+	tmpInput := filepath.Join(tmpDir, "input.pdf")
+	if err := os.WriteFile(tmpInput, input, 0644); err != nil {
+		return nil, err
+	}
+
+	// Convert to images
+	outputDir := filepath.Join(tmpDir, "output")
+	imageFiles, err := s.ConvertFile(tmpInput, outputDir)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(imageFiles) == 0 {
-		return "", fmt.Errorf("no images generated")
+		return nil, fmt.Errorf("no images generated")
 	}
 
-	// Fayllarni tartiblash (page-1, page-2, page-10 muammosini hal qilish uchun)
-	// Oddiy string sort yetarli bo'lmasligi mumkin (1, 10, 2), lekin pdftoppm 0 bilan to'ldirish (e.g. -001) flagini ishlatmadik.
-	// pdftoppm default: page-1.jpg, page-10.jpg.
-	// Keling, ularni shundayligicha arxivlaymiz.
-	sort.Strings(imageFiles)
+	// Create ZIP archive
+	var zipBuffer bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuffer)
 
-	// 6. ZIP fayl yaratish
-	zipID := uuid.NewString()
-	zipPath := filepath.Join("storage", "pdf_to_jpg", zipID+".zip")
-
-	zipFile, err := os.Create(zipPath)
-	if err != nil {
-		s.log.Error("Failed to create zip file", logger.Error(err))
-		return "", err
-	}
-	defer zipFile.Close()
-
-	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
-
-	for _, imgPath := range imageFiles {
+	for i, imgPath := range imageFiles {
 		imgData, err := os.ReadFile(imgPath)
 		if err != nil {
 			continue
 		}
 
-		// ZIP ichidagi fayl nomi
-		fileName := filepath.Base(imgPath)
+		fileName := fmt.Sprintf("page_%d.jpg", i+1)
 		w, err := zipWriter.Create(fileName)
 		if err != nil {
 			continue
@@ -132,33 +140,44 @@ func (s *pdfToJPGService) Create(ctx context.Context, req models.PDFToJPGRequest
 	}
 	zipWriter.Close()
 
-	// 7. ZIP faylni bazaga saqlash
-	fi, _ := os.Stat(zipPath)
-	zipFileModel := models.File{
-		ID:         zipID,
-		UserID:     userID,
-		FileName:   fmt.Sprintf("%s_images.zip", strings.TrimSuffix(file.FileName, filepath.Ext(file.FileName))),
-		FilePath:   zipPath,
-		FileType:   "application/zip",
-		FileSize:   fi.Size(),
-		UploadedAt: time.Now(),
-	}
-
-	if _, err := s.stg.File().Save(ctx, zipFileModel); err != nil {
-		s.log.Error("Failed to save zip file to DB", logger.Error(err))
-		return "", err
-	}
-
-	job.ZipFileID = &zipID
-	job.Status = "done"
-
-	s.log.Info("PDFToJPG rendering completed", logger.String("jobID", jobID), logger.Int("pages", len(imageFiles)))
-	return jobID, nil
+	s.log.Info("PDF to JPG ZIP created", logger.Int("pages", len(imageFiles)))
+	return zipBuffer.Bytes(), nil
 }
 
-func (s *pdfToJPGService) GetByID(ctx context.Context, id string) (*models.PDFToJPGJob, error) {
-	return &models.PDFToJPGJob{
-		ID:     id,
-		Status: "done",
-	}, nil
+// ConvertToImages converts PDF bytes and returns individual image bytes
+func (s *pdfToJPGService) ConvertToImages(input []byte) ([][]byte, error) {
+	s.log.Info("PDFToJPGService.ConvertToImages called")
+
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pdf-to-jpg-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write input PDF
+	tmpInput := filepath.Join(tmpDir, "input.pdf")
+	if err := os.WriteFile(tmpInput, input, 0644); err != nil {
+		return nil, err
+	}
+
+	// Convert to images
+	outputDir := filepath.Join(tmpDir, "output")
+	imageFiles, err := s.ConvertFile(tmpInput, outputDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read all images
+	var images [][]byte
+	for _, imgPath := range imageFiles {
+		imgData, err := os.ReadFile(imgPath)
+		if err != nil {
+			continue
+		}
+		images = append(images, imgData)
+	}
+
+	s.log.Info("PDF to images conversion completed", logger.Int("pages", len(images)))
+	return images, nil
 }
