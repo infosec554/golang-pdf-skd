@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	pdfsdk "github.com/infosec554/golang-pdf-sdk"
+	pdfsdk "github.com/infosec554/convert-pdf-go-sdk"
 )
 
 func main() {

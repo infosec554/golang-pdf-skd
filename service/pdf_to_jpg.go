@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
+	"github.com/infosec554/convert-pdf-go-sdk/pkg/logger"
 )
 
 type PDFToJPGService interface {

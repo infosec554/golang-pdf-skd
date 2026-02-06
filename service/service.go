@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/infosec554/golang-pdf-sdk/pkg/gotenberg"
-	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
+	"github.com/infosec554/convert-pdf-go-sdk/pkg/gotenberg"
+	"github.com/infosec554/convert-pdf-go-sdk/pkg/logger"
 )
 
 type PDFService interface {

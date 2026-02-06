@@ -10,7 +10,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
-	"github.com/infosec554/golang-pdf-sdk/pkg/logger"
+	"github.com/infosec554/convert-pdf-go-sdk/pkg/logger"
 )
 
 type JPGToPDFService interface {
