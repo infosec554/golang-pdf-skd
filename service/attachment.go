@@ -41,7 +41,9 @@ func (s *attachmentService) AddAttachments(input []byte, files map[string][]byte
 
 	var fileNames []string
 	for name, content := range files {
-		filePath := filepath.Join(tmpDir, name)
+		// Security fix: sanitize filename
+		safeName := filepath.Base(name)
+		filePath := filepath.Join(tmpDir, safeName)
 		if err := os.WriteFile(filePath, content, 0644); err != nil {
 			return nil, err
 		}

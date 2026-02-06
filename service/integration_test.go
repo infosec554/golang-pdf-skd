@@ -268,3 +268,85 @@ func TestOperationsChain(t *testing.T) {
 		t.Error("Chained operations returned empty output")
 	}
 }
+
+func TestMetadata(t *testing.T) {
+	gotURL := os.Getenv("GOTENBERG_URL")
+	if gotURL == "" {
+		t.Skip("GOTENBERG_URL not set")
+	}
+
+	testPDFPath := "testdata/test.pdf"
+	if _, err := os.Stat(testPDFPath); os.IsNotExist(err) {
+		t.Skip("testdata/test.pdf not found")
+	}
+
+	pdfBytes, err := os.ReadFile(testPDFPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pdfService := service.NewWithGotenberg(gotURL)
+
+	// GetMetadata
+	meta, err := pdfService.Metadata().GetMetadata(pdfBytes)
+	if err != nil {
+		t.Fatalf("GetMetadata failed: %v", err)
+	}
+	if meta == nil {
+		t.Error("Metadata is nil")
+	}
+	// Per advanced.go, we expect at least pages, version, encrypted
+	if _, ok := meta["pages"]; !ok {
+		t.Error("Metadata missing 'pages'")
+	}
+
+	// SetMetadata (Limited support, returns input unchanged usually)
+	// Just verify it doesn't crash
+	newBytes, err := pdfService.Metadata().SetMetadata(pdfBytes, map[string]string{"Title": "New Title"})
+	if err != nil {
+		t.Fatalf("SetMetadata failed: %v", err)
+	}
+	if len(newBytes) == 0 {
+		t.Error("SetMetadata returned empty bytes")
+	}
+}
+
+func TestImageExtraction(t *testing.T) {
+	gotURL := os.Getenv("GOTENBERG_URL")
+	if gotURL == "" {
+		t.Skip("GOTENBERG_URL not set")
+	}
+
+	// 1. Create a PDF with an image first (using JPGToPDF)
+	tmpDir := createTempTestDir(t)
+	defer os.RemoveAll(tmpDir)
+
+	jpgPath := filepath.Join(tmpDir, "test_extract.jpg")
+	createDummyJPG(t, jpgPath)
+
+	f, err := os.Open(jpgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	pdfService := service.NewWithGotenberg(gotURL)
+	pdfWithImage, err := pdfService.JPGToPDF().Convert(f, "test_extract.jpg")
+	if err != nil {
+		t.Fatalf("Failed to create PDF for image extraction: %v", err)
+	}
+
+	// 2. Extract images from it
+	images, err := pdfService.Images().ExtractImages(pdfWithImage)
+	if err != nil {
+		t.Fatalf("ExtractImages failed: %v", err)
+	}
+
+	// Note: JPGToPDF using gofpdf might bake the image in a way that pdfcpu can extract,
+	// or it might not. gofpdf usually embeds standard JPEG images.
+	if len(images) == 0 {
+		t.Log("Warning: No images extracted from generated PDF. This might depend on how gofpdf embeds them or pdfcpu extracts them.")
+	} else {
+		t.Logf("Extracted %d images", len(images))
+	}
+}

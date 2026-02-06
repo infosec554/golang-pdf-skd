@@ -106,7 +106,8 @@ func (s *jpgToPDFService) ConvertMultipleBytes(inputs [][]byte, filenames []stri
 	for i, data := range inputs {
 		filename := fmt.Sprintf("image_%d.jpg", i)
 		if i < len(filenames) {
-			filename = filenames[i]
+			// Security fix: sanitize filename
+			filename = filepath.Base(filenames[i])
 		}
 		tmpPath := filepath.Join(tmpDir, filename)
 		if err := os.WriteFile(tmpPath, data, 0644); err != nil {
