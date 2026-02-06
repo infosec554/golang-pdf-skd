@@ -60,10 +60,7 @@ func (s *excelToPDFService) ConvertFile(ctx context.Context, inputPath, outputPa
 func (s *excelToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
 	s.log.Info("ExcelToPDFService.ConvertBytes called")
 
-	ext := ".xlsx"
-	if len(filename) > 4 {
-		ext = filename[len(filename)-5:]
-	}
+	ext := getExcelExtension(filename)
 	tmpInput, err := os.CreateTemp("", "excel-input-*"+ext)
 	if err != nil {
 		return nil, err
@@ -84,4 +81,13 @@ func (s *excelToPDFService) ConvertBytes(ctx context.Context, input []byte, file
 
 	s.log.Info("Excel to PDF conversion completed", logger.Int("outputSize", len(resultBytes)))
 	return resultBytes, nil
+}
+
+func getExcelExtension(filename string) string {
+	for i := len(filename) - 1; i >= 0; i-- {
+		if filename[i] == '.' {
+			return filename[i:]
+		}
+	}
+	return ".xlsx"
 }

@@ -18,6 +18,13 @@ type PDFService interface {
 	Watermark() WatermarkService
 	Protect() ProtectService
 	Unlock() UnlockService
+	Info() InfoService
+	Pages() PageService
+	Text() TextService
+	Metadata() MetadataService
+	Images() ImageExtractService
+	Batch(maxWorkers int) *BatchProcessor
+	Pipeline() *Pipeline
 }
 
 type pdfService struct {
@@ -33,6 +40,11 @@ type pdfService struct {
 	watermark       WatermarkService
 	protect         ProtectService
 	unlock          UnlockService
+	info            InfoService
+	pages           PageService
+	text            TextService
+	metadata        MetadataService
+	images          ImageExtractService
 	log             logger.ILogger
 	gotClient       gotenberg.Client
 }
@@ -51,6 +63,11 @@ func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
 		watermark:       NewWatermarkService(log),
 		protect:         NewProtectService(log),
 		unlock:          NewUnlockService(log),
+		info:            NewInfoService(log),
+		pages:           NewPageService(log),
+		text:            NewTextService(log),
+		metadata:        NewMetadataService(log),
+		images:          NewImageExtractService(log),
 		log:             log,
 		gotClient:       gotClient,
 	}
@@ -74,3 +91,16 @@ func (s *pdfService) Rotate() RotateService                   { return s.rotate 
 func (s *pdfService) Watermark() WatermarkService             { return s.watermark }
 func (s *pdfService) Protect() ProtectService                 { return s.protect }
 func (s *pdfService) Unlock() UnlockService                   { return s.unlock }
+func (s *pdfService) Info() InfoService                       { return s.info }
+func (s *pdfService) Pages() PageService                      { return s.pages }
+func (s *pdfService) Text() TextService                       { return s.text }
+func (s *pdfService) Metadata() MetadataService               { return s.metadata }
+func (s *pdfService) Images() ImageExtractService             { return s.images }
+
+func (s *pdfService) Batch(maxWorkers int) *BatchProcessor {
+	return NewBatchProcessor(s, maxWorkers)
+}
+
+func (s *pdfService) Pipeline() *Pipeline {
+	return NewPipeline(s)
+}

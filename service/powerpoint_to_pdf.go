@@ -60,10 +60,7 @@ func (s *powerPointToPDFService) ConvertFile(ctx context.Context, inputPath, out
 func (s *powerPointToPDFService) ConvertBytes(ctx context.Context, input []byte, filename string) ([]byte, error) {
 	s.log.Info("PowerPointToPDFService.ConvertBytes called")
 
-	ext := ".pptx"
-	if len(filename) > 4 {
-		ext = filename[len(filename)-5:]
-	}
+	ext := getPPTExtension(filename)
 	tmpInput, err := os.CreateTemp("", "ppt-input-*"+ext)
 	if err != nil {
 		return nil, err
@@ -84,4 +81,13 @@ func (s *powerPointToPDFService) ConvertBytes(ctx context.Context, input []byte,
 
 	s.log.Info("PowerPoint to PDF conversion completed", logger.Int("outputSize", len(resultBytes)))
 	return resultBytes, nil
+}
+
+func getPPTExtension(filename string) string {
+	for i := len(filename) - 1; i >= 0; i-- {
+		if filename[i] == '.' {
+			return filename[i:]
+		}
+	}
+	return ".pptx"
 }

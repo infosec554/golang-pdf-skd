@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"io"
 	"os"
 
@@ -89,9 +88,8 @@ func (s *compressService) CompressBytes(input []byte) ([]byte, error) {
 	s.log.Info("Compression completed",
 		logger.Int("inputSize", len(input)),
 		logger.Int("outputSize", len(output)),
-		logger.String("ratio", bytes.NewBufferString("").String()),
+		logger.Int64("compressionRatio", int64(ratio)),
 	)
-	_ = ratio
 
 	return output, nil
 }
