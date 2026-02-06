@@ -11,7 +11,7 @@ import (
 	"github.com/infosec554/convert-pdf-go-sdk/service"
 )
 
-const Version = "2.2.0"
+const Version = "2.3.0"
 
 type Options struct {
 	GotenbergURL        string

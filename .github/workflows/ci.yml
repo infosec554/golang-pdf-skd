@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           go mod download
-          sudo apt-get update && sudo apt-get install -y poppler-utils
+          sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out . ./service/... ./pkg/...
@@ -88,7 +88,7 @@ jobs:
           go-version: '1.22'
 
       - name: Install poppler
-        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng
 
       - name: Wait for Gotenberg
         run: |

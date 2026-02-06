@@ -1,4 +1,4 @@
-# 📄 Convert PDF Go SDK v2.2
+# 📄 Convert PDF Go SDK v2.3
 
 A powerful, memory-efficient Go SDK for PDF operations with parallel processing support.
 
@@ -6,17 +6,15 @@ A powerful, memory-efficient Go SDK for PDF operations with parallel processing 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-blue.svg)](https://golang.org)
 
-## 🆕 What's New in v2.2.0
+## 🆕 What's New in v2.3.0
 
-- **�️ Archive Service** - Convert PDF to PDF/A for long-term archiving (PDF/A-1b, 2b, 3b)
-- **� Form Service** - Fill PDF forms programmatically (limited support)
-- **� Attachment Service** - Add/Extract file attachments from PDF
-- **🔄 Worker Pool** - Control parallel operations with configurable worker limits
+- **👁️ OCR Service** - Extract text from scanned PDFs and create searchable PDFs (Tesseract)
+- **🗄️ Archive Service** - Convert PDF to PDF/A for long-term archiving (PDF/A-1b, 2b, 3b)
+- **📝 Form Service** - Fill PDF forms programmatically
+- **📎 Attachment Service** - Add/Extract file attachments from PDF
+- **🔄 Worker Pool** - Control parallel operations
 - **📊 Batch Processing** - Process multiple PDFs in parallel
-- **⛓️ Pipeline** - Chain multiple operations (compress → watermark → protect)
-- **📋 PDF Info** - Get page count, version, encryption status
-- **🔧 Connection Pooling** - Optimized HTTP connections for Gotenberg
-- **💾 Buffer Pool** - Memory-efficient buffer reuse
+- **⛓️ Pipeline** - Chain multiple operations
 
 ## 📊 Performance & Limits
 
@@ -36,12 +34,13 @@ go get github.com/infosec554/convert-pdf-go-sdk
 ## 📋 Requirements
 
 - **Go 1.22+**
-- **Gotenberg** (for Word/Excel/PowerPoint conversion & PDF/A)
-- **pdftoppm** (for PDF to JPG)
+- **Gotenberg** (for Word/Excel/PowerPoint & PDF/A)
+- **poppler-utils** (for PDF to Image)
+- **tesseract-ocr** (for OCR)
 
 ```bash
 # Ubuntu/Debian
-sudo apt-get install poppler-utils
+sudo apt-get install poppler-utils tesseract-ocr tesseract-ocr-eng
 
 # Run Gotenberg with Docker
 docker run -d -p 3000:3000 gotenberg/gotenberg:8
@@ -56,30 +55,50 @@ import (
     "fmt"
     "os"
     "time"
+    "context"
 
     pdfsdk "github.com/infosec554/convert-pdf-go-sdk"
 )
 
 func main() {
-    // Initialize with optimized settings
     sdk := pdfsdk.NewWithOptions(&pdfsdk.Options{
         GotenbergURL:  "http://localhost:3000",
-        MaxWorkers:    10,   // Max 10 parallel operations
-        MaxIdleConns:  100,  // Connection pool
-        RequestTimeout: 5 * time.Minute,
+        MaxWorkers:    10,
     })
-    defer sdk.Close() // Clean up connections
+    defer sdk.Close()
 
     input, _ := os.ReadFile("document.pdf")
+    ctx := context.Background()
 
-    // Get PDF info
+    // 1. Get Info
     info, _ := sdk.Info().GetInfoBytes(input)
-    fmt.Printf("Pages: %d, Encrypted: %v\n", info.PageCount, info.Encrypted)
+    fmt.Printf("Pages: %d\n", info.PageCount)
 
-    // Compress
-    output, _ := sdk.Compress().CompressBytes(input)
-    fmt.Printf("Size: %d -> %d bytes\n", len(input), len(output))
+    // 2. Compress
+    compressed, _ := sdk.Compress().CompressBytes(input)
+
+    // 3. OCR (Extract Text from Scanned PDF)
+    text, err := sdk.OCR().ExtractText(ctx, input, "eng")
+    if err == nil {
+        fmt.Println("Extracted Text:", text)
+    }
+
+    // 4. Create Searchable PDF (from scanned)
+    searchable, _ := sdk.OCR().CreateSearchablePDF(ctx, input, "eng")
+    os.WriteFile("searchable.pdf", searchable, 0644)
 }
+```
+
+## 👁️ OCR (Optical Character Recognition)
+
+Process scanned documents:
+
+```go
+// Extract text from scanned PDF
+text, err := sdk.OCR().ExtractText(ctx, input, "eng")
+
+// Convert scanned PDF to Searchable PDF (adds text layer)
+searchableBytes, err := sdk.OCR().CreateSearchablePDF(ctx, input, "eng")
 ```
 
 ## 🗄️ Archive (PDF/A)
@@ -91,36 +110,19 @@ Convert documents for long-term preservation:
 pdfaBytes, err := sdk.Archive().ConvertToPDFA(input, "PDF/A-1b")
 ```
 
-## 📝 Forms
-
-Fill PDF forms:
+## 📝 Forms & Attachments
 
 ```go
-data := map[string]interface{}{
-    "Name": "John Doe",
-    "Age":  30,
-}
-filledBytes, err := sdk.Form().FillForm(input, data)
-```
+// Fill Form
+sdk.Form().FillForm(input, map[string]interface{}{"Name": "John"})
 
-## � Attachments
-
-Add attachments to PDF:
-
-```go
-files := map[string][]byte{
-    "invoice.xml": xmlBytes,
-    "notes.txt":   txtBytes,
-}
-result, err := sdk.Attachment().AddAttachments(input, files)
+// Add Attachment
+sdk.Attachment().AddAttachments(input, map[string][]byte{"note.txt": []byte("Hi")})
 ```
 
 ## ⛓️ Pipeline (Chained Operations)
 
-Execute multiple operations in sequence:
-
 ```go
-// Compress → Add Watermark → Protect with password
 result, err := sdk.Pipeline().
     Compress().
     Watermark("CONFIDENTIAL", nil).
@@ -130,51 +132,33 @@ result, err := sdk.Pipeline().
 
 ## 🔄 Batch Processing (Parallel)
 
-Process multiple PDFs concurrently:
-
 ```go
 ctx := context.Background()
-
-// Compress 100 PDFs with max 5 workers
-inputs := [][]byte{pdf1, pdf2, pdf3, /* ... */}
+inputs := [][]byte{pdf1, pdf2, pdf3}
 results := sdk.Batch(5).CompressBatch(ctx, inputs)
-
-for _, r := range results {
-    if r.Error != nil {
-        log.Printf("PDF %d failed: %v", r.Index, r.Error)
-    } else {
-        // Use r.Data
-    }
-}
 ```
 
 ## 🔧 Available Services
 
 | Service | Description | Parallel | Gotenberg |
 |---------|-------------|:--------:|:---------:|
-| `Info()` | PDF metadata, page count, validation | ✅ | ❌ |
+| `Info()` | PDF metadata, page count | ✅ | ❌ |
 | `Compress()` | Optimize and compress | ✅ | ❌ |
 | `Merge()` | Combine multiple PDFs | ✅ | ❌ |
 | `Split()` | Split by page ranges | ✅ | ❌ |
 | `Rotate()` | Rotate pages | ✅ | ❌ |
-| `Watermark()` | Add text watermarks | ✅ | ❌ |
+| `Watermark()` | Watermarking | ✅ | ❌ |
 | `Protect()` | Password protection | ✅ | ❌ |
-| `Unlock()` | Remove passwords | ✅ | ❌ |
-| `PDFToJPG()` | Convert to images | ✅ | ❌ |
-| `JPGToPDF()` | Images to PDF | ✅ | ❌ |
-| `WordToPDF()` | DOCX to PDF | ✅ | ✅ |
-| `ExcelToPDF()` | XLSX to PDF | ✅ | ✅ |
-| `PowerPointToPDF()` | PPTX to PDF | ✅ | ✅ |
+| `OCR()` | Extract Text / Searchable PDF | ✅ | ❌ |
 | `Archive()` | PDF to PDF/A | ✅ | ✅ |
 | `Form()` | Fill Forms | ✅ | ❌ |
-| `Attachment()` | Add/Extract Attachments | ✅ | ❌ |
-| `Batch()` | Parallel batch ops | ✅ | - |
-| `Pipeline()` | Chained operations | ✅ | - |
+| `WordToPDF()` | DOCX to PDF | ✅ | ✅ |
+
+(Full list in code)
 
 ## 📧 Contact
 
 - **Telegram:** [@zarifjorayev](https://t.me/zarifjorayev)
-- **Email:** infosec554@gmail.com
 - **GitHub:** [@infosec554](https://github.com/infosec554)
 
 ## 📄 License

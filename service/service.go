@@ -27,6 +27,7 @@ type PDFService interface {
 	Archive() ArchiveService
 	Form() FormService
 	Attachment() AttachmentService
+	OCR() OCRService
 
 	Batch(maxWorkers int) *BatchProcessor
 	Pipeline() *Pipeline
@@ -53,6 +54,7 @@ type pdfService struct {
 	archive         ArchiveService
 	form            FormService
 	attachment      AttachmentService
+	ocr             OCRService
 	log             logger.ILogger
 	gotClient       gotenberg.Client
 }
@@ -79,6 +81,7 @@ func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
 		archive:         NewArchiveService(log, gotClient),
 		form:            NewFormService(log),
 		attachment:      NewAttachmentService(log),
+		ocr:             NewOCRService(log),
 		log:             log,
 		gotClient:       gotClient,
 	}
@@ -110,6 +113,7 @@ func (s *pdfService) Images() ImageExtractService             { return s.images 
 func (s *pdfService) Archive() ArchiveService                 { return s.archive }
 func (s *pdfService) Form() FormService                       { return s.form }
 func (s *pdfService) Attachment() AttachmentService           { return s.attachment }
+func (s *pdfService) OCR() OCRService                         { return s.ocr }
 
 func (s *pdfService) Batch(maxWorkers int) *BatchProcessor {
 	return NewBatchProcessor(s, maxWorkers)
