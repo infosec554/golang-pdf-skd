@@ -23,6 +23,11 @@ type PDFService interface {
 	Text() TextService
 	Metadata() MetadataService
 	Images() ImageExtractService
+	// Enterprise features (v2.2)
+	Archive() ArchiveService
+	Form() FormService
+	Attachment() AttachmentService
+
 	Batch(maxWorkers int) *BatchProcessor
 	Pipeline() *Pipeline
 }
@@ -45,6 +50,9 @@ type pdfService struct {
 	text            TextService
 	metadata        MetadataService
 	images          ImageExtractService
+	archive         ArchiveService
+	form            FormService
+	attachment      AttachmentService
 	log             logger.ILogger
 	gotClient       gotenberg.Client
 }
@@ -68,6 +76,9 @@ func New(log logger.ILogger, gotClient gotenberg.Client) PDFService {
 		text:            NewTextService(log),
 		metadata:        NewMetadataService(log),
 		images:          NewImageExtractService(log),
+		archive:         NewArchiveService(log, gotClient),
+		form:            NewFormService(log),
+		attachment:      NewAttachmentService(log),
 		log:             log,
 		gotClient:       gotClient,
 	}
@@ -96,6 +107,9 @@ func (s *pdfService) Pages() PageService                      { return s.pages }
 func (s *pdfService) Text() TextService                       { return s.text }
 func (s *pdfService) Metadata() MetadataService               { return s.metadata }
 func (s *pdfService) Images() ImageExtractService             { return s.images }
+func (s *pdfService) Archive() ArchiveService                 { return s.archive }
+func (s *pdfService) Form() FormService                       { return s.form }
+func (s *pdfService) Attachment() AttachmentService           { return s.attachment }
 
 func (s *pdfService) Batch(maxWorkers int) *BatchProcessor {
 	return NewBatchProcessor(s, maxWorkers)

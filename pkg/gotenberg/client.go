@@ -18,6 +18,9 @@ type Client interface {
 	ExcelToPDF(ctx context.Context, excelPath string) ([]byte, error)
 	PowerPointToPDF(ctx context.Context, pptPath string) ([]byte, error)
 	HTMLToPDF(ctx context.Context, htmlPath string) ([]byte, error)
+	ConvertToPDFA(ctx context.Context, pdfPath string, format string) ([]byte, error)
+
+	// New streaming methods for memory efficiency
 	WordToPDFStream(ctx context.Context, wordPath string, w io.Writer) error
 	ExcelToPDFStream(ctx context.Context, excelPath string, w io.Writer) error
 }
