@@ -10,14 +10,16 @@ build/
 # Test binary
 *.test
 
-# Go workspace file
+# Go workspace
 go.work
+go.work.sum
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
@@ -26,8 +28,9 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*.local
 
-# Local data
+# Local data (permission issues)
 data/
 storage/
 tmp/
@@ -35,3 +38,8 @@ tmp/
 # Coverage
 coverage.out
 coverage.html
+*.coverprofile
+
+# Logs
+*.log
+logs/

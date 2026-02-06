@@ -1,125 +1,97 @@
+// Bu fayl SDK dan foydalanish namunasi
+// go run cmd/main.go bilan ishga tushiring
+
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
-	"github.com/infosec554/golang-pdf-sdk/service"
+	pdfsdk "github.com/infosec554/golang-pdf-sdk"
 )
 
 func main() {
-	// Create PDF service with Gotenberg URL
-	pdfService := service.NewWithGotenberg("http://localhost:3000")
+	fmt.Println("🚀 Golang PDF SDK - Namunalar")
+	fmt.Println("================================")
 
-	// Example: Compress a PDF
-	exampleCompress(pdfService)
+	// SDK ni ishga tushirish (Gotenberg URL)
+	pdf := pdfsdk.New("http://localhost:3000")
 
-	// Example: Rotate a PDF
-	exampleRotate(pdfService)
-
-	// Example: Split a PDF
-	exampleSplit(pdfService)
-
-	fmt.Println("All examples completed!")
-}
-
-func exampleCompress(pdf service.PDFService) {
-	fmt.Println("=== PDF Compression Example ===")
-
-	// Read input PDF
-	inputBytes, err := os.ReadFile("input.pdf")
-	if err != nil {
-		fmt.Println("No input.pdf found, skipping compression example")
-		return
+	// Namuna 1: Kompressiya
+	fmt.Println("\n📦 1. PDF Kompressiya:")
+	if input, err := os.ReadFile("test.pdf"); err == nil {
+		output, err := pdf.Compress().CompressBytes(input)
+		if err != nil {
+			fmt.Println("   ❌ Xato:", err)
+		} else {
+			os.WriteFile("compressed.pdf", output, 0644)
+			saving := 100 - (float64(len(output))/float64(len(input)))*100
+			fmt.Printf("   ✅ %d → %d bayt (%.1f%% tejaldi)\n", len(input), len(output), saving)
+		}
+	} else {
+		fmt.Println("   ⚠️  test.pdf topilmadi, o'tkazib yuborildi")
 	}
 
-	// Compress
-	outputBytes, err := pdf.Compress().CompressBytes(inputBytes)
-	if err != nil {
-		fmt.Println("Compression failed:", err)
-		return
+	// Namuna 2: Aylantirish
+	fmt.Println("\n🔄 2. PDF Aylantirish (90°):")
+	if input, err := os.ReadFile("test.pdf"); err == nil {
+		output, err := pdf.Rotate().RotateBytes(input, 90, "all")
+		if err != nil {
+			fmt.Println("   ❌ Xato:", err)
+		} else {
+			os.WriteFile("rotated.pdf", output, 0644)
+			fmt.Println("   ✅ rotated.pdf yaratildi")
+		}
+	} else {
+		fmt.Println("   ⚠️  test.pdf topilmadi")
 	}
 
-	// Save output
-	if err := os.WriteFile("compressed.pdf", outputBytes, 0644); err != nil {
-		fmt.Println("Failed to save:", err)
-		return
+	// Namuna 3: Watermark
+	fmt.Println("\n💧 3. Watermark qo'shish:")
+	if input, err := os.ReadFile("test.pdf"); err == nil {
+		output, err := pdf.Watermark().AddWatermarkBytes(input, "MAXFIY HUJJAT", nil)
+		if err != nil {
+			fmt.Println("   ❌ Xato:", err)
+		} else {
+			os.WriteFile("watermarked.pdf", output, 0644)
+			fmt.Println("   ✅ watermarked.pdf yaratildi")
+		}
+	} else {
+		fmt.Println("   ⚠️  test.pdf topilmadi")
 	}
 
-	fmt.Printf("Compressed: %d -> %d bytes (%.1f%% reduction)\n",
-		len(inputBytes), len(outputBytes),
-		(1-float64(len(outputBytes))/float64(len(inputBytes)))*100)
-}
-
-func exampleRotate(pdf service.PDFService) {
-	fmt.Println("\n=== PDF Rotation Example ===")
-
-	inputBytes, err := os.ReadFile("input.pdf")
-	if err != nil {
-		fmt.Println("No input.pdf found, skipping rotation example")
-		return
+	// Namuna 4: Himoyalash
+	fmt.Println("\n🔒 4. PDF Himoyalash:")
+	if input, err := os.ReadFile("test.pdf"); err == nil {
+		output, err := pdf.Protect().ProtectBytes(input, "parol123")
+		if err != nil {
+			fmt.Println("   ❌ Xato:", err)
+		} else {
+			os.WriteFile("protected.pdf", output, 0644)
+			fmt.Println("   ✅ protected.pdf yaratildi (parol: parol123)")
+		}
+	} else {
+		fmt.Println("   ⚠️  test.pdf topilmadi")
 	}
 
-	// Rotate 90 degrees
-	outputBytes, err := pdf.Rotate().RotateBytes(inputBytes, 90, "all")
-	if err != nil {
-		fmt.Println("Rotation failed:", err)
-		return
+	// Namuna 5: PDF dan JPG
+	fmt.Println("\n🖼️  5. PDF dan JPG:")
+	if input, err := os.ReadFile("test.pdf"); err == nil {
+		images, err := pdf.PDFToJPG().ConvertToImages(input)
+		if err != nil {
+			fmt.Println("   ❌ Xato:", err)
+		} else {
+			os.MkdirAll("pages", 0755)
+			for i, img := range images {
+				os.WriteFile(fmt.Sprintf("pages/sahifa_%d.jpg", i+1), img, 0644)
+			}
+			fmt.Printf("   ✅ %d ta rasm yaratildi (pages/ papkada)\n", len(images))
+		}
+	} else {
+		fmt.Println("   ⚠️  test.pdf topilmadi")
 	}
 
-	if err := os.WriteFile("rotated.pdf", outputBytes, 0644); err != nil {
-		fmt.Println("Failed to save:", err)
-		return
-	}
-
-	fmt.Println("Rotated PDF saved as rotated.pdf")
-}
-
-func exampleSplit(pdf service.PDFService) {
-	fmt.Println("\n=== PDF Split Example ===")
-
-	inputBytes, err := os.ReadFile("input.pdf")
-	if err != nil {
-		fmt.Println("No input.pdf found, skipping split example")
-		return
-	}
-
-	// Split first 2 pages
-	zipBytes, err := pdf.Split().SplitBytes(inputBytes, "1-2")
-	if err != nil {
-		fmt.Println("Split failed:", err)
-		return
-	}
-
-	if err := os.WriteFile("split_pages.zip", zipBytes, 0644); err != nil {
-		fmt.Println("Failed to save:", err)
-		return
-	}
-
-	fmt.Println("Split pages saved as split_pages.zip")
-}
-
-func exampleWordToPDF(pdf service.PDFService) {
-	fmt.Println("\n=== Word to PDF Example ===")
-
-	inputBytes, err := os.ReadFile("document.docx")
-	if err != nil {
-		fmt.Println("No document.docx found, skipping")
-		return
-	}
-
-	ctx := context.Background()
-	outputBytes, err := pdf.WordToPDF().ConvertBytes(ctx, inputBytes, "document.docx")
-	if err != nil {
-		fmt.Println("Conversion failed:", err)
-		return
-	}
-
-	if err := os.WriteFile("document.pdf", outputBytes, 0644); err != nil {
-		fmt.Println("Failed to save:", err)
-		return
-	}
-
-	fmt.Println("Converted to document.pdf")
+	fmt.Println("\n================================")
+	fmt.Println("✅ Namunalar tugadi!")
+	fmt.Println("\n💡 Sinab ko'rish uchun 'test.pdf' faylini qo'ying")
 }
